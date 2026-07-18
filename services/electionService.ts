@@ -1,3 +1,19 @@
+interface AddVoterResponse extends ApiResponse {
+    voter?: AdminVoter;
+  }
+
+export interface AdminVoter {
+    id: string | number;
+    name: string;
+    dateOfBirth: string;
+    hasVoted: boolean;
+    votedAt: string;
+  }
+  
+  interface GetVotersResponse extends ApiResponse {
+    voters: AdminVoter[];
+  }
+
 interface ResetElectionResponse extends ApiResponse {
     resetVoterCount: number;
   }
@@ -141,5 +157,24 @@ export interface VoterSearchResult {
       action: "resetElection",
       electionId: "gcr-2026",
       confirmation,
+    });
+  }
+
+  export async function getVoters(): Promise<GetVotersResponse> {
+    return callElectionApi<GetVotersResponse>({
+      action: "getVoters",
+      electionId: "gcr-2026",
+    });
+  }
+
+  export async function addVoter(
+    name: string,
+    dateOfBirth: string
+  ): Promise<AddVoterResponse> {
+    return callElectionApi<AddVoterResponse>({
+      action: "addVoter",
+      electionId: "gcr-2026",
+      name,
+      dateOfBirth,
     });
   }

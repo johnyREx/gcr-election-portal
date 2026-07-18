@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 import Container from "@/components/layout/Container";
 import Section from "@/components/layout/Section";
@@ -234,12 +235,12 @@ export default function AdminDashboard() {
             </CardHeader>
 
             <CardContent className="space-y-3">
-              <button
-                type="button"
-                className="w-full rounded-md border px-4 py-3 text-left font-medium hover:bg-slate-50"
+              <Link
+                href="/admin/voters"
+                className="block w-full rounded-md border px-4 py-3 text-left font-medium transition-colors hover:bg-slate-50"
               >
                 Manage voters
-              </button>
+              </Link>
 
               <button
                 type="button"

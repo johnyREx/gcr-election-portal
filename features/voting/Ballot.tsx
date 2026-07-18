@@ -8,7 +8,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { candidates } from "@/constants/candidates";
-import { voters } from "@/constants/voters";
+import { submitVote } from "@/services/electionService";
 
 interface BallotProps {
   voterId: number;
@@ -21,58 +21,44 @@ export default function Ballot({
 }: BallotProps) {
   const [selectedCandidateId, setSelectedCandidateId] = useState("");
   const [error, setError] = useState("");
-
-  const voter = voters.find((item) => item.id === voterId);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const presidentialCandidates = candidates.filter(
     (candidate) => candidate.position === "President"
   );
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
-
-    if (!voter) {
-      setError("The verified voter could not be found.");
-      return;
-    }
 
     if (!selectedCandidateId) {
       setError("Please select a candidate.");
       return;
     }
 
-    const hasAlreadyVoted =
-      localStorage.getItem(`gcr-voted-${voter.id}`) === "true";
+    try {
+      setIsSubmitting(true);
 
-    if (hasAlreadyVoted) {
-      setError("This voter has already cast a vote.");
-      return;
+      const response = await submitVote(
+        voterId,
+        Number(selectedCandidateId)
+      );
+
+      if (!response.success) {
+        setError(response.message || "Unable to submit your vote.");
+        return;
+      }
+
+      onSubmitted();
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Unable to submit your vote."
+      );
+    } finally {
+      setIsSubmitting(false);
     }
-
-    const storedVotes = JSON.parse(
-      localStorage.getItem("gcr-test-votes") ?? "[]"
-    );
-
-    storedVotes.push({
-      electionId: "gcr-2026",
-      position: "President",
-      candidateId: Number(selectedCandidateId),
-      submittedAt: new Date().toISOString(),
-    });
-
-    localStorage.setItem(
-      "gcr-test-votes",
-      JSON.stringify(storedVotes)
-    );
-
-    localStorage.setItem(`gcr-voted-${voter.id}`, "true");
-
-    onSubmitted();
-  }
-
-  if (!voter) {
-    return null;
   }
 
   return (
@@ -81,7 +67,7 @@ export default function Ballot({
         <CardTitle>Presidential Ballot</CardTitle>
 
         <p className="text-sm text-slate-600">
-          Verified voter: {voter.name}
+          Your identity has been verified. Select one candidate.
         </p>
       </CardHeader>
 
@@ -132,8 +118,12 @@ export default function Ballot({
             </p>
           )}
 
-          <Button type="submit" className="w-full">
-            Submit Vote
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? "Submitting Vote..." : "Submit Vote"}
           </Button>
         </form>
       </CardContent>

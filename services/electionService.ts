@@ -16,6 +16,27 @@ export interface VoterSearchResult {
     candidateId: number;
   }
   
+  export interface ResultCandidate {
+    id: number;
+    name: string;
+    location: string;
+    image?: string;
+    votes: number;
+    percentage: number;
+  }
+  
+  export interface PositionResult {
+    position: string;
+    totalVotes: number;
+    candidates: ResultCandidate[];
+  }
+  
+  export interface ResultsSummary {
+    registeredVoters: number;
+    votesCast: number;
+    turnoutPercentage: number;
+  }
+  
   interface ApiResponse {
     success: boolean;
     message?: string;
@@ -37,6 +58,11 @@ export interface VoterSearchResult {
     reference?: string;
   }
   
+  interface GetResultsResponse extends ApiResponse {
+    summary: ResultsSummary;
+    results: PositionResult[];
+  }
+  
   async function callElectionApi<T>(body: object): Promise<T> {
     const response = await fetch("/api/election", {
       method: "POST",
@@ -49,7 +75,9 @@ export interface VoterSearchResult {
     const data = await response.json();
   
     if (!response.ok) {
-      throw new Error(data.message || "Election server request failed.");
+      throw new Error(
+        data.message || "Election server request failed."
+      );
     }
   
     return data;
@@ -93,5 +121,12 @@ export interface VoterSearchResult {
       electionId: "gcr-2026",
       voterId,
       selections,
+    });
+  }
+  
+  export async function getResults(): Promise<GetResultsResponse> {
+    return callElectionApi<GetResultsResponse>({
+      action: "getResults",
+      electionId: "gcr-2026",
     });
   }

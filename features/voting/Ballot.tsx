@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -7,8 +7,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { candidates } from "@/constants/candidates";
-import { submitVote } from "@/services/electionService";
+import {
+  ElectionCandidate,
+  getCandidates,
+  submitBallot,
+} from "@/services/electionService";
 
 interface BallotProps {
   voterId: number;
@@ -19,33 +22,81 @@ export default function Ballot({
   voterId,
   onSubmitted,
 }: BallotProps) {
-  const [selectedCandidateId, setSelectedCandidateId] = useState("");
+  const [candidates, setCandidates] = useState<ElectionCandidate[]>([]);
+  const [selections, setSelections] = useState<Record<string, number>>({});
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const presidentialCandidates = candidates.filter(
-    (candidate) => candidate.position === "President"
-  );
+  useEffect(() => {
+    async function loadCandidates() {
+      try {
+        const response = await getCandidates();
+
+        if (!response.success) {
+          setError(response.message || "Unable to load candidates.");
+          return;
+        }
+
+        setCandidates(response.candidates);
+      } catch (error) {
+        setError(
+          error instanceof Error
+            ? error.message
+            : "Unable to load candidates."
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadCandidates();
+  }, []);
+
+  const candidatesByPosition = useMemo(() => {
+    return candidates.reduce<Record<string, ElectionCandidate[]>>(
+      (groups, candidate) => {
+        if (!groups[candidate.position]) {
+          groups[candidate.position] = [];
+        }
+
+        groups[candidate.position].push(candidate);
+        return groups;
+      },
+      {}
+    );
+  }, [candidates]);
+
+  const positions = Object.keys(candidatesByPosition);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
 
-    if (!selectedCandidateId) {
-      setError("Please select a candidate.");
+    const missingPosition = positions.find(
+      (position) => !selections[position]
+    );
+
+    if (missingPosition) {
+      setError(`Please select a candidate for ${missingPosition}.`);
       return;
     }
+
+    const ballotSelections = positions.map((position) => ({
+      position,
+      candidateId: selections[position],
+    }));
 
     try {
       setIsSubmitting(true);
 
-      const response = await submitVote(
+      const response = await submitBallot(
         voterId,
-        Number(selectedCandidateId)
+        ballotSelections
       );
 
       if (!response.success) {
-        setError(response.message || "Unable to submit your vote.");
+        setError(response.message || "Unable to submit your ballot.");
         return;
       }
 
@@ -54,60 +105,84 @@ export default function Ballot({
       setError(
         error instanceof Error
           ? error.message
-          : "Unable to submit your vote."
+          : "Unable to submit your ballot."
       );
     } finally {
       setIsSubmitting(false);
     }
   }
 
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          Loading ballot...
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Presidential Ballot</CardTitle>
+        <CardTitle>Official Ballot</CardTitle>
 
         <p className="text-sm text-slate-600">
-          Your identity has been verified. Select one candidate.
+          Select one candidate for each position.
         </p>
       </CardHeader>
 
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-3">
-            {presidentialCandidates.map((candidate) => (
-              <label
-                key={candidate.id}
-                className={`flex cursor-pointer items-center gap-3 rounded-xl border p-4 transition ${
-                  selectedCandidateId === String(candidate.id)
-                    ? "border-green-700 bg-green-50"
-                    : "bg-white hover:bg-slate-50"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="candidate"
-                  value={candidate.id}
-                  checked={
-                    selectedCandidateId === String(candidate.id)
-                  }
-                  onChange={(event) => {
-                    setSelectedCandidateId(event.target.value);
-                    setError("");
-                  }}
-                />
+        <form onSubmit={handleSubmit} className="space-y-10">
+          {positions.map((position) => (
+            <fieldset key={position}>
+              <legend className="mb-4 text-xl font-bold text-slate-900">
+                {position}
+              </legend>
 
-                <span>
-                  <span className="block font-semibold text-slate-900">
-                    {candidate.name}
-                  </span>
+              <div className="space-y-3">
+                {candidatesByPosition[position].map((candidate) => {
+                  const isSelected =
+                    selections[position] === candidate.id;
 
-                  <span className="text-sm text-slate-600">
-                    {candidate.location}
-                  </span>
-                </span>
-              </label>
-            ))}
-          </div>
+                  return (
+                    <label
+                      key={candidate.id}
+                      className={`flex cursor-pointer items-center gap-4 rounded-xl border p-4 transition ${
+                        isSelected
+                          ? "border-green-700 bg-green-50"
+                          : "bg-white hover:bg-slate-50"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name={position}
+                        value={candidate.id}
+                        checked={isSelected}
+                        onChange={() => {
+                          setSelections((current) => ({
+                            ...current,
+                            [position]: candidate.id,
+                          }));
+                          setError("");
+                        }}
+                      />
+
+                      <span>
+                        <span className="block font-semibold text-slate-900">
+                          {candidate.name}
+                        </span>
+
+                        <span className="text-sm text-slate-600">
+                          {candidate.location}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+          ))}
 
           {error && (
             <p
@@ -121,9 +196,11 @@ export default function Ballot({
           <Button
             type="submit"
             className="w-full"
-            disabled={isSubmitting}
+            disabled={isSubmitting || positions.length === 0}
           >
-            {isSubmitting ? "Submitting Vote..." : "Submit Vote"}
+            {isSubmitting
+              ? "Submitting Ballot..."
+              : "Submit Complete Ballot"}
           </Button>
         </form>
       </CardContent>

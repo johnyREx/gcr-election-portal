@@ -1,6 +1,19 @@
-interface VoterSearchResult {
+export interface VoterSearchResult {
     id: number;
     name: string;
+  }
+  
+  export interface ElectionCandidate {
+    id: number;
+    name: string;
+    position: string;
+    location: string;
+    image?: string;
+  }
+  
+  export interface BallotSelection {
+    position: string;
+    candidateId: number;
   }
   
   interface ApiResponse {
@@ -16,7 +29,11 @@ interface VoterSearchResult {
     voter?: VoterSearchResult;
   }
   
-  interface SubmitVoteResponse extends ApiResponse {
+  interface GetCandidatesResponse extends ApiResponse {
+    candidates: ElectionCandidate[];
+  }
+  
+  interface SubmitBallotResponse extends ApiResponse {
     reference?: string;
   }
   
@@ -60,15 +77,21 @@ interface VoterSearchResult {
     });
   }
   
-  export async function submitVote(
+  export async function getCandidates(): Promise<GetCandidatesResponse> {
+    return callElectionApi<GetCandidatesResponse>({
+      action: "getCandidates",
+      electionId: "gcr-2026",
+    });
+  }
+  
+  export async function submitBallot(
     voterId: number,
-    candidateId: number
-  ): Promise<SubmitVoteResponse> {
-    return callElectionApi<SubmitVoteResponse>({
-      action: "submitVote",
+    selections: BallotSelection[]
+  ): Promise<SubmitBallotResponse> {
+    return callElectionApi<SubmitBallotResponse>({
+      action: "submitBallot",
       electionId: "gcr-2026",
       voterId,
-      position: "President",
-      candidateId,
+      selections,
     });
   }

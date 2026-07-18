@@ -1,3 +1,6 @@
+interface ResetElectionResponse extends ApiResponse {
+    resetVoterCount: number;
+  }
 export interface VoterSearchResult {
     id: number;
     name: string;
@@ -128,5 +131,15 @@ export interface VoterSearchResult {
     return callElectionApi<GetResultsResponse>({
       action: "getResults",
       electionId: "gcr-2026",
+    });
+  }
+
+  export async function resetElection(
+    confirmation: string
+  ): Promise<ResetElectionResponse> {
+    return callElectionApi<ResetElectionResponse>({
+      action: "resetElection",
+      electionId: "gcr-2026",
+      confirmation,
     });
   }

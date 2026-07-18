@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card";
 import {
   getResults,
+  resetElection,
   PositionResult,
   ResultsSummary,
 } from "@/services/electionService";
@@ -20,6 +21,7 @@ export default function AdminDashboard() {
   const [summary, setSummary] = useState<ResultsSummary | null>(null);
   const [results, setResults] = useState<PositionResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isResetting, setIsResetting] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -47,6 +49,43 @@ export default function AdminDashboard() {
 
     loadDashboard();
   }, []);
+
+  async function handleResetElection() {
+    const confirmation = window.prompt(
+      "This will erase ALL votes and allow every voter to vote again.\n\nType RESET to continue."
+    );
+
+    if (confirmation === null) {
+      return;
+    }
+
+    if (confirmation.trim() !== "RESET") {
+      window.alert("Reset cancelled. You must type RESET exactly.");
+      return;
+    }
+
+    try {
+      setIsResetting(true);
+
+      const response = await resetElection(confirmation.trim());
+
+      if (!response.success) {
+        window.alert(response.message || "Unable to reset election.");
+        return;
+      }
+
+      window.alert("Election reset successfully.");
+      window.location.reload();
+    } catch (error) {
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Unable to reset election."
+      );
+    } finally {
+      setIsResetting(false);
+    }
+  }
 
   if (isLoading) {
     return (
@@ -94,6 +133,7 @@ export default function AdminDashboard() {
                 <p className="font-semibold text-slate-900">
                   GCR General Elections 2026
                 </p>
+
                 <p className="text-sm text-slate-500">
                   Election ID: gcr-2026
                 </p>
@@ -159,25 +199,32 @@ export default function AdminDashboard() {
             </CardHeader>
 
             <CardContent className="space-y-5">
-              {results.map((result) => (
-                <div
-                  key={result.position}
-                  className="flex items-center justify-between border-b pb-4 last:border-b-0 last:pb-0"
-                >
-                  <div>
+              {results.length === 0 ? (
+                <p className="text-sm text-slate-500">
+                  No election positions found.
+                </p>
+              ) : (
+                results.map((result) => (
+                  <div
+                    key={result.position}
+                    className="flex items-center justify-between border-b pb-4 last:border-b-0 last:pb-0"
+                  >
+                    <div>
+                      <p className="font-semibold text-slate-900">
+                        {result.position}
+                      </p>
+
+                      <p className="text-sm text-slate-500">
+                        {result.candidates.length} candidates
+                      </p>
+                    </div>
+
                     <p className="font-semibold text-slate-900">
-                      {result.position}
-                    </p>
-                    <p className="text-sm text-slate-500">
-                      {result.candidates.length} candidates
+                      {result.totalVotes} votes
                     </p>
                   </div>
-
-                  <p className="font-semibold text-slate-900">
-                    {result.totalVotes} votes
-                  </p>
-                </div>
-              ))}
+                ))
+              )}
             </CardContent>
           </Card>
 
@@ -210,9 +257,13 @@ export default function AdminDashboard() {
 
               <button
                 type="button"
-                className="w-full rounded-md border border-red-200 px-4 py-3 text-left font-medium text-red-700 hover:bg-red-50"
+                onClick={handleResetElection}
+                disabled={isResetting}
+                className="w-full rounded-md border border-red-200 px-4 py-3 text-left font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Reset test election
+                {isResetting
+                  ? "Resetting election..."
+                  : "Reset test election"}
               </button>
             </CardContent>
           </Card>

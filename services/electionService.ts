@@ -1,23 +1,9 @@
-interface AddVoterResponse extends ApiResponse {
-    voter?: AdminVoter;
-  }
-
-export interface AdminVoter {
-    id: string | number;
-    name: string;
-    dateOfBirth: string;
-    hasVoted: boolean;
-    votedAt: string;
+interface ApiResponse {
+    success: boolean;
+    message?: string;
   }
   
-  interface GetVotersResponse extends ApiResponse {
-    voters: AdminVoter[];
-  }
-
-interface ResetElectionResponse extends ApiResponse {
-    resetVoterCount: number;
-  }
-export interface VoterSearchResult {
+  export interface VoterSearchResult {
     id: number;
     name: string;
   }
@@ -56,9 +42,22 @@ export interface VoterSearchResult {
     turnoutPercentage: number;
   }
   
-  interface ApiResponse {
-    success: boolean;
-    message?: string;
+  export interface AdminVoter {
+    id: string | number;
+    name: string;
+    dateOfBirth: string;
+    hasVoted: boolean;
+    votedAt: string;
+  }
+  
+  export interface VoterImportRecord {
+    name: string;
+    dateOfBirth: string;
+  }
+  
+  export interface VoterImportError {
+    row: number;
+    message: string;
   }
   
   interface SearchVotersResponse extends ApiResponse {
@@ -80,6 +79,30 @@ export interface VoterSearchResult {
   interface GetResultsResponse extends ApiResponse {
     summary: ResultsSummary;
     results: PositionResult[];
+  }
+  
+  interface ResetElectionResponse extends ApiResponse {
+    resetVoterCount: number;
+  }
+  
+  interface GetVotersResponse extends ApiResponse {
+    voters: AdminVoter[];
+  }
+  
+  interface AddVoterResponse extends ApiResponse {
+    voter?: AdminVoter;
+  }
+  
+  interface UpdateVoterResponse extends ApiResponse {
+    voter?: AdminVoter;
+  }
+  
+  interface ImportVotersResponse extends ApiResponse {
+    importedCount: number;
+    duplicateCount: number;
+    errorCount: number;
+    errors: VoterImportError[];
+    voters: AdminVoter[];
   }
   
   async function callElectionApi<T>(body: object): Promise<T> {
@@ -149,7 +172,7 @@ export interface VoterSearchResult {
       electionId: "gcr-2026",
     });
   }
-
+  
   export async function resetElection(
     confirmation: string
   ): Promise<ResetElectionResponse> {
@@ -159,14 +182,14 @@ export interface VoterSearchResult {
       confirmation,
     });
   }
-
+  
   export async function getVoters(): Promise<GetVotersResponse> {
     return callElectionApi<GetVotersResponse>({
       action: "getVoters",
       electionId: "gcr-2026",
     });
   }
-
+  
   export async function addVoter(
     name: string,
     dateOfBirth: string
@@ -176,5 +199,29 @@ export interface VoterSearchResult {
       electionId: "gcr-2026",
       name,
       dateOfBirth,
+    });
+  }
+  
+  export async function updateVoter(
+    voterId: string | number,
+    name: string,
+    dateOfBirth: string
+  ): Promise<UpdateVoterResponse> {
+    return callElectionApi<UpdateVoterResponse>({
+      action: "updateVoter",
+      electionId: "gcr-2026",
+      voterId,
+      name,
+      dateOfBirth,
+    });
+  }
+  
+  export async function importVoters(
+    voters: VoterImportRecord[]
+  ): Promise<ImportVotersResponse> {
+    return callElectionApi<ImportVotersResponse>({
+      action: "importVoters",
+      electionId: "gcr-2026",
+      voters,
     });
   }

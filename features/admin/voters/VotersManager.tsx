@@ -15,17 +15,26 @@ import {
   addVoter,
   AdminVoter,
   getVoters,
+  updateVoter,
 } from "@/services/electionService";
+
+import CsvImportButton from "./CsvImportButton";
 
 export default function VotersManager() {
   const [voters, setVoters] = useState<AdminVoter[]>([]);
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [isAdding, setIsAdding] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const [editingVoter, setEditingVoter] =
+    useState<AdminVoter | null>(null);
+
   const [name, setName] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
+
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [formError, setFormError] = useState("");
 
   useEffect(() => {
@@ -69,9 +78,61 @@ export default function VotersManager() {
     });
   }, [search, voters]);
 
-  async function handleAddVoter(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function openAddModal() {
+    setEditingVoter(null);
+    setName("");
+    setDateOfBirth("");
     setFormError("");
+    setSuccessMessage("");
+    setIsModalOpen(true);
+  }
+
+  function openEditModal(voter: AdminVoter) {
+    setEditingVoter(voter);
+    setName(voter.name);
+    setDateOfBirth(voter.dateOfBirth);
+    setFormError("");
+    setSuccessMessage("");
+    setIsModalOpen(true);
+  }
+
+  function closeModal() {
+    if (isSaving) {
+      return;
+    }
+
+    setIsModalOpen(false);
+    setEditingVoter(null);
+    setName("");
+    setDateOfBirth("");
+    setFormError("");
+  }
+
+  function handleImportComplete(importedVoters: AdminVoter[]) {
+    setVoters(
+      [...importedVoters].sort((a, b) =>
+        a.name.localeCompare(b.name)
+      )
+    );
+
+    setError("");
+  }
+
+  function handleImportMessage(message: string) {
+    setSuccessMessage(message);
+    setError("");
+  }
+
+  function handleImportError(message: string) {
+    setError(message);
+    setSuccessMessage("");
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    setFormError("");
+    setSuccessMessage("");
 
     if (!name.trim() || !dateOfBirth) {
       setFormError("Name and date of birth are required.");
@@ -79,44 +140,74 @@ export default function VotersManager() {
     }
 
     try {
-      setIsAdding(true);
+      setIsSaving(true);
 
-      const response = await addVoter(name.trim(), dateOfBirth);
+      if (editingVoter) {
+        const response = await updateVoter(
+          editingVoter.id,
+          name.trim(),
+          dateOfBirth
+        );
 
-      if (!response.success || !response.voter) {
-        setFormError(response.message || "Unable to add voter.");
-        return;
+        if (!response.success || !response.voter) {
+          setFormError(
+            response.message || "Unable to update voter."
+          );
+          return;
+        }
+
+        const updatedVoter = response.voter;
+
+        setVoters((currentVoters) =>
+          currentVoters
+            .map((voter) =>
+              String(voter.id) === String(updatedVoter.id)
+                ? updatedVoter
+                : voter
+            )
+            .sort((a, b) => a.name.localeCompare(b.name))
+        );
+
+        setSuccessMessage("Voter updated successfully.");
+      } else {
+        const response = await addVoter(
+          name.trim(),
+          dateOfBirth
+        );
+
+        if (!response.success || !response.voter) {
+          setFormError(response.message || "Unable to add voter.");
+          return;
+        }
+
+        const newVoter = response.voter;
+
+        setVoters((currentVoters) =>
+          [...currentVoters, newVoter].sort((a, b) =>
+            a.name.localeCompare(b.name)
+          )
+        );
+
+        setSuccessMessage("Voter added successfully.");
       }
 
-      setVoters((currentVoters) =>
-        [...currentVoters, response.voter as AdminVoter].sort((a, b) =>
-          a.name.localeCompare(b.name)
-        )
-      );
-
+      setIsModalOpen(false);
+      setEditingVoter(null);
       setName("");
       setDateOfBirth("");
-      setIsModalOpen(false);
+      setFormError("");
+      setError("");
     } catch (error) {
       setFormError(
         error instanceof Error
           ? error.message
-          : "Unable to add voter."
+          : editingVoter
+            ? "Unable to update voter."
+            : "Unable to add voter."
       );
     } finally {
-      setIsAdding(false);
+      setIsSaving(false);
     }
-  }
-
-  function closeModal() {
-    if (isAdding) {
-      return;
-    }
-
-    setIsModalOpen(false);
-    setName("");
-    setDateOfBirth("");
-    setFormError("");
   }
 
   if (isLoading) {
@@ -152,18 +243,32 @@ export default function VotersManager() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setIsModalOpen(true)}
-            className="rounded-md bg-green-700 px-5 py-3 font-semibold text-white hover:bg-green-800"
-          >
-            Add voter
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <CsvImportButton
+              onImportComplete={handleImportComplete}
+              onMessage={handleImportMessage}
+              onError={handleImportError}
+            />
+
+            <button
+              type="button"
+              onClick={openAddModal}
+              className="rounded-md bg-green-700 px-5 py-3 font-semibold text-white transition-colors hover:bg-green-800"
+            >
+              Add voter
+            </button>
+          </div>
         </div>
 
         {error && (
           <div className="mb-6 rounded-md bg-red-50 px-4 py-3 text-red-700">
             {error}
+          </div>
+        )}
+
+        {successMessage && (
+          <div className="mb-6 rounded-md bg-green-50 px-4 py-3 text-green-700">
+            {successMessage}
           </div>
         )}
 
@@ -189,15 +294,25 @@ export default function VotersManager() {
               <table className="w-full min-w-[750px] text-left">
                 <thead>
                   <tr className="border-b text-sm text-slate-500">
-                    <th className="px-3 py-3 font-medium">Name</th>
+                    <th className="px-3 py-3 font-medium">
+                      Name
+                    </th>
+
                     <th className="px-3 py-3 font-medium">
                       Date of birth
                     </th>
-                    <th className="px-3 py-3 font-medium">Status</th>
+
+                    <th className="px-3 py-3 font-medium">
+                      Status
+                    </th>
+
                     <th className="px-3 py-3 font-medium">
                       Voted at
                     </th>
-                    <th className="px-3 py-3 font-medium">Actions</th>
+
+                    <th className="px-3 py-3 font-medium">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
 
@@ -236,6 +351,7 @@ export default function VotersManager() {
                       <td className="px-3 py-4">
                         <button
                           type="button"
+                          onClick={() => openEditModal(voter)}
                           className="font-medium text-green-700 hover:underline"
                         >
                           Edit
@@ -261,11 +377,15 @@ export default function VotersManager() {
           <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
             <div className="mb-6">
               <h2 className="text-2xl font-bold text-slate-900">
-                Add New Voter
+                {editingVoter
+                  ? "Edit Voter"
+                  : "Add New Voter"}
               </h2>
 
               <p className="mt-2 text-sm text-slate-600">
-                Register a voter for GCR General Elections 2026.
+                {editingVoter
+                  ? "Update this voter’s registration details."
+                  : "Register a voter for GCR General Elections 2026."}
               </p>
             </div>
 
@@ -275,7 +395,10 @@ export default function VotersManager() {
               </div>
             )}
 
-            <form onSubmit={handleAddVoter} className="space-y-5">
+            <form
+              onSubmit={handleSubmit}
+              className="space-y-5"
+            >
               <div>
                 <label
                   htmlFor="voter-name"
@@ -288,9 +411,11 @@ export default function VotersManager() {
                   id="voter-name"
                   type="text"
                   value={name}
-                  onChange={(event) => setName(event.target.value)}
+                  onChange={(event) =>
+                    setName(event.target.value)
+                  }
                   placeholder="Enter full name"
-                  disabled={isAdding}
+                  disabled={isSaving}
                   className="w-full rounded-md border px-4 py-3 outline-none focus:ring-2 focus:ring-green-700 disabled:opacity-60"
                 />
               </div>
@@ -310,7 +435,7 @@ export default function VotersManager() {
                   onChange={(event) =>
                     setDateOfBirth(event.target.value)
                   }
-                  disabled={isAdding}
+                  disabled={isSaving}
                   className="w-full rounded-md border px-4 py-3 outline-none focus:ring-2 focus:ring-green-700 disabled:opacity-60"
                 />
               </div>
@@ -319,7 +444,7 @@ export default function VotersManager() {
                 <button
                   type="button"
                   onClick={closeModal}
-                  disabled={isAdding}
+                  disabled={isSaving}
                   className="rounded-md border px-4 py-2 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
                 >
                   Cancel
@@ -327,10 +452,16 @@ export default function VotersManager() {
 
                 <button
                   type="submit"
-                  disabled={isAdding}
+                  disabled={isSaving}
                   className="rounded-md bg-green-700 px-4 py-2 font-semibold text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {isAdding ? "Adding voter..." : "Add voter"}
+                  {isSaving
+                    ? editingVoter
+                      ? "Saving changes..."
+                      : "Adding voter..."
+                    : editingVoter
+                      ? "Save changes"
+                      : "Add voter"}
                 </button>
               </div>
             </form>

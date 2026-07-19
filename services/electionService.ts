@@ -59,6 +59,39 @@ interface ApiResponse {
     row: number;
     message: string;
   }
+
+  export interface ElectionCandidate {
+    id: number;
+    name: string;
+    position: string;
+    location: string;
+    image?: string;
+  }
+
+  export interface AdminCandidate {
+    id: string | number;
+    electionId: string;
+    name: string;
+    position: string;
+    location: string;
+    image: string;
+  }
+  
+  interface GetAdminCandidatesResponse extends ApiResponse {
+    candidates: AdminCandidate[];
+  }
+  
+  interface AddCandidateResponse extends ApiResponse {
+    candidate?: AdminCandidate;
+  }
+  
+  interface UpdateCandidateResponse extends ApiResponse {
+    candidate?: AdminCandidate;
+  }
+  
+  interface DeleteCandidateResponse extends ApiResponse {
+    candidateId?: string | number;
+  }
   
   interface SearchVotersResponse extends ApiResponse {
     voters: VoterSearchResult[];
@@ -223,5 +256,56 @@ interface ApiResponse {
       action: "importVoters",
       electionId: "gcr-2026",
       voters,
+    });
+  }
+
+  export async function getAdminCandidates(): Promise<GetAdminCandidatesResponse> {
+    return callElectionApi<GetAdminCandidatesResponse>({
+      action: "getAdminCandidates",
+      electionId: "gcr-2026",
+    });
+  }
+  
+  export async function addCandidate(
+    name: string,
+    position: string,
+    location: string,
+    image: string
+  ): Promise<AddCandidateResponse> {
+    return callElectionApi<AddCandidateResponse>({
+      action: "addCandidate",
+      electionId: "gcr-2026",
+      name,
+      position,
+      location,
+      image,
+    });
+  }
+  
+  export async function updateCandidate(
+    candidateId: string | number,
+    name: string,
+    position: string,
+    location: string,
+    image: string
+  ): Promise<UpdateCandidateResponse> {
+    return callElectionApi<UpdateCandidateResponse>({
+      action: "updateCandidate",
+      electionId: "gcr-2026",
+      candidateId,
+      name,
+      position,
+      location,
+      image,
+    });
+  }
+  
+  export async function deleteCandidate(
+    candidateId: string | number
+  ): Promise<DeleteCandidateResponse> {
+    return callElectionApi<DeleteCandidateResponse>({
+      action: "deleteCandidate",
+      electionId: "gcr-2026",
+      candidateId,
     });
   }

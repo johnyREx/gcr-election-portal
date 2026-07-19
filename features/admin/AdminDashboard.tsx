@@ -242,12 +242,12 @@ export default function AdminDashboard() {
                 Manage voters
               </Link>
 
-              <button
-                type="button"
-                className="w-full rounded-md border px-4 py-3 text-left font-medium hover:bg-slate-50"
+              <Link
+                href="/admin/candidates"
+                className="block w-full rounded-md border px-4 py-3 text-left font-medium transition-colors hover:bg-slate-50"
               >
                 Manage candidates
-              </button>
+              </Link>
 
               <button
                 type="button"

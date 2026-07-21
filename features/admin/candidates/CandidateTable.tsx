@@ -4,12 +4,16 @@ import { AdminCandidate } from "@/services/electionService";
 
 interface CandidateTableProps {
   candidates: AdminCandidate[];
+  deletingCandidateId: string | number | null;
   onEdit: (candidate: AdminCandidate) => void;
+  onDelete: (candidate: AdminCandidate) => void;
 }
 
 export default function CandidateTable({
   candidates,
+  deletingCandidateId,
   onEdit,
+  onDelete,
 }: CandidateTableProps) {
   if (candidates.length === 0) {
     return (
@@ -33,48 +37,65 @@ export default function CandidateTable({
         </thead>
 
         <tbody>
-          {candidates.map((candidate) => (
-            <tr
-              key={candidate.id}
-              className="border-b last:border-b-0"
-            >
-              <td className="px-3 py-4">
-                {candidate.image ? (
-                  <img
-                    src={candidate.image}
-                    alt={candidate.name}
-                    className="h-12 w-12 rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-200 text-xs text-slate-500">
-                    N/A
+          {candidates.map((candidate) => {
+            const isDeleting =
+              String(deletingCandidateId) === String(candidate.id);
+
+            return (
+              <tr
+                key={candidate.id}
+                className="border-b last:border-b-0"
+              >
+                <td className="px-3 py-4">
+                  {candidate.image ? (
+                    <img
+                      src={candidate.image}
+                      alt={candidate.name}
+                      className="h-12 w-12 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-200 text-xs text-slate-500">
+                      N/A
+                    </div>
+                  )}
+                </td>
+
+                <td className="px-3 py-4 font-medium text-slate-900">
+                  {candidate.name}
+                </td>
+
+                <td className="px-3 py-4 text-slate-600">
+                  {candidate.position}
+                </td>
+
+                <td className="px-3 py-4 text-slate-600">
+                  {candidate.location}
+                </td>
+
+                <td className="px-3 py-4">
+                  <div className="flex items-center gap-4">
+                    <button
+                      type="button"
+                      onClick={() => onEdit(candidate)}
+                      disabled={isDeleting}
+                      className="font-medium text-green-700 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Edit
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => onDelete(candidate)}
+                      disabled={isDeleting}
+                      className="font-medium text-red-700 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isDeleting ? "Deleting..." : "Delete"}
+                    </button>
                   </div>
-                )}
-              </td>
-
-              <td className="px-3 py-4 font-medium text-slate-900">
-                {candidate.name}
-              </td>
-
-              <td className="px-3 py-4 text-slate-600">
-                {candidate.position}
-              </td>
-
-              <td className="px-3 py-4 text-slate-600">
-                {candidate.location}
-              </td>
-
-              <td className="px-3 py-4">
-                <button
-                  type="button"
-                  onClick={() => onEdit(candidate)}
-                  className="font-medium text-green-700 hover:underline"
-                >
-                  Edit
-                </button>
-              </td>
-            </tr>
-          ))}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

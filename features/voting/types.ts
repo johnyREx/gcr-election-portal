@@ -1,8 +1,15 @@
-export type VotingStep = "verify" | "ballot" | "confirmation";
+import type { Id } from "@/services/electionService";
 
-export interface Voter {
-  id: number;
+export type VotingStep =
+  | "verify"
+  | "ballot"
+  | "confirmation";
+
+export interface VerifiedVotingVoter {
+  id: Id;
   name: string;
-  dateOfBirth: string;
-  hasVoted: boolean;
+}
+
+export interface BallotConfirmation {
+  reference?: string;
 }

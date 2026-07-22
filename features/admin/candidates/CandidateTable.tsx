@@ -1,13 +1,6 @@
 "use client";
 
-import { AdminCandidate } from "@/services/electionService";
-
-interface CandidateTableProps {
-  candidates: AdminCandidate[];
-  deletingCandidateId: string | number | null;
-  onEdit: (candidate: AdminCandidate) => void;
-  onDelete: (candidate: AdminCandidate) => void;
-}
+import type { CandidateTableProps } from "./types";
 
 export default function CandidateTable({
   candidates,
@@ -28,34 +21,52 @@ export default function CandidateTable({
       <table className="w-full min-w-[800px] text-left">
         <thead>
           <tr className="border-b text-sm text-slate-500">
-            <th className="px-3 py-3 font-medium">Photo</th>
-            <th className="px-3 py-3 font-medium">Name</th>
-            <th className="px-3 py-3 font-medium">Position</th>
-            <th className="px-3 py-3 font-medium">Location</th>
-            <th className="px-3 py-3 font-medium">Actions</th>
+            <th className="px-3 py-3 font-medium">
+              Photo
+            </th>
+            <th className="px-3 py-3 font-medium">
+              Name
+            </th>
+            <th className="px-3 py-3 font-medium">
+              Position
+            </th>
+            <th className="px-3 py-3 font-medium">
+              Location
+            </th>
+            <th className="px-3 py-3 font-medium">
+              Actions
+            </th>
           </tr>
         </thead>
 
         <tbody>
           {candidates.map((candidate) => {
             const isDeleting =
-              String(deletingCandidateId) === String(candidate.id);
+              String(deletingCandidateId) ===
+              String(candidate.id);
 
             return (
               <tr
-                key={candidate.id}
+                key={String(candidate.id)}
                 className="border-b last:border-b-0"
               >
                 <td className="px-3 py-4">
                   {candidate.image ? (
                     <img
                       src={candidate.image}
-                      alt={candidate.name}
+                      alt={`${candidate.name} portrait`}
                       className="h-12 w-12 rounded-full object-cover"
                     />
                   ) : (
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-200 text-xs text-slate-500">
-                      N/A
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-500">
+                      {candidate.name
+                        .split(/\s+/)
+                        .slice(0, 2)
+                        .map((part) =>
+                          part.charAt(0)
+                        )
+                        .join("")
+                        .toUpperCase()}
                     </div>
                   )}
                 </td>
@@ -76,7 +87,9 @@ export default function CandidateTable({
                   <div className="flex items-center gap-4">
                     <button
                       type="button"
-                      onClick={() => onEdit(candidate)}
+                      onClick={() =>
+                        onEdit(candidate)
+                      }
                       disabled={isDeleting}
                       className="font-medium text-green-700 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
                     >
@@ -85,11 +98,15 @@ export default function CandidateTable({
 
                     <button
                       type="button"
-                      onClick={() => onDelete(candidate)}
+                      onClick={() =>
+                        onDelete(candidate)
+                      }
                       disabled={isDeleting}
                       className="font-medium text-red-700 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {isDeleting ? "Deleting..." : "Delete"}
+                      {isDeleting
+                        ? "Deleting..."
+                        : "Delete"}
                     </button>
                   </div>
                 </td>

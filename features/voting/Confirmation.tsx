@@ -1,9 +1,18 @@
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+} from "@/components/ui/card";
 
-export default function Confirmation() {
+interface ConfirmationProps {
+  reference?: string;
+}
+
+export default function Confirmation({
+  reference,
+}: ConfirmationProps) {
   return (
     <Card>
       <CardContent className="py-12 text-center">
@@ -16,14 +25,31 @@ export default function Confirmation() {
         </h2>
 
         <p className="mt-4 text-slate-600">
-          Thank you. Your vote has been submitted successfully.
+          Thank you. Your ballot has been submitted
+          successfully.
         </p>
 
-        <p className="mt-2 text-sm text-slate-500">
+        {reference && (
+          <div className="mx-auto mt-6 max-w-sm rounded-lg border bg-slate-50 px-4 py-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Ballot reference
+            </p>
+
+            <p className="mt-1 break-all font-mono text-lg font-bold text-slate-900">
+              {reference}
+            </p>
+          </div>
+        )}
+
+        <p className="mt-4 text-sm text-slate-500">
           You cannot vote again in this election.
         </p>
 
-        <Button asChild variant="outline" className="mt-8">
+        <Button
+          asChild
+          variant="outline"
+          className="mt-8"
+        >
           <Link href="/">Return Home</Link>
         </Button>
       </CardContent>

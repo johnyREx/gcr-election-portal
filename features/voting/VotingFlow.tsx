@@ -7,13 +7,19 @@ import Section from "@/components/layout/Section";
 import Ballot from "@/features/voting/Ballot";
 import Confirmation from "@/features/voting/Confirmation";
 import VerificationForm from "@/features/voting/VerificationForm";
-import type { VotingStep } from "@/features/voting/types";
+import type {
+  BallotConfirmation,
+  VerifiedVotingVoter,
+  VotingStep,
+} from "@/features/voting/types";
 
 export default function VotingFlow() {
-  const [step, setStep] = useState<VotingStep>("verify");
-  const [verifiedVoterId, setVerifiedVoterId] = useState<number | null>(
-    null
-  );
+  const [step, setStep] =
+    useState<VotingStep>("verify");
+  const [verifiedVoter, setVerifiedVoter] =
+    useState<VerifiedVotingVoter | null>(null);
+  const [confirmation, setConfirmation] =
+    useState<BallotConfirmation>({});
   const [hasLoaded, setHasLoaded] = useState(false);
 
   useEffect(() => {
@@ -38,27 +44,36 @@ export default function VotingFlow() {
             </h1>
 
             <p className="mt-4 text-slate-600">
-              Verify your identity before accessing the ballot.
+              Verify your identity before accessing
+              the official ballot.
             </p>
           </div>
 
           {step === "verify" && (
             <VerificationForm
-              onVerified={(voterId) => {
-                setVerifiedVoterId(voterId);
+              onVerified={(voter) => {
+                setVerifiedVoter(voter);
                 setStep("ballot");
               }}
             />
           )}
 
-          {step === "ballot" && verifiedVoterId !== null && (
-            <Ballot
-              voterId={verifiedVoterId}
-              onSubmitted={() => setStep("confirmation")}
+          {step === "ballot" &&
+            verifiedVoter && (
+              <Ballot
+                voter={verifiedVoter}
+                onSubmitted={(reference) => {
+                  setConfirmation({ reference });
+                  setStep("confirmation");
+                }}
+              />
+            )}
+
+          {step === "confirmation" && (
+            <Confirmation
+              reference={confirmation.reference}
             />
           )}
-
-          {step === "confirmation" && <Confirmation />}
         </div>
       </Container>
     </Section>

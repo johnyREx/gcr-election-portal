@@ -1,26 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  FormEvent,
+  useEffect,
+  useState,
+} from "react";
 
-import { AdminCandidate } from "@/services/electionService";
+import type { CandidateModalProps } from "./types";
 
-interface CandidateModalProps {
-  open: boolean;
-  candidate: AdminCandidate | null;
-  loading: boolean;
-  onClose(): void;
-  onSave(data: {
-    name: string;
-    position: string;
-    location: string;
-    image: string;
-  }): void;
-}
-
-const POSITIONS = [
+export const CANDIDATE_POSITIONS = [
   "President",
+  "Vice President",
   "General Secretary",
-];
+  "Financial Secretary",
+  "Organizing Secretary",
+  "Public Relations Officer (PRO)",
+  "Women’s Commissioner",
+] as const;
 
 export default function CandidateModal({
   open,
@@ -30,8 +26,12 @@ export default function CandidateModal({
   onSave,
 }: CandidateModalProps) {
   const [name, setName] = useState("");
-  const [position, setPosition] = useState(POSITIONS[0]);
-  const [location, setLocation] = useState("");
+  const [position, setPosition] =
+    useState<string>(
+      CANDIDATE_POSITIONS[0]
+    );
+  const [location, setLocation] =
+    useState("");
   const [image, setImage] = useState("");
   const [error, setError] = useState("");
 
@@ -43,7 +43,9 @@ export default function CandidateModal({
       setImage(candidate.image || "");
     } else {
       setName("");
-      setPosition(POSITIONS[0]);
+      setPosition(
+        CANDIDATE_POSITIONS[0]
+      );
       setLocation("");
       setImage("");
     }
@@ -55,11 +57,27 @@ export default function CandidateModal({
     return null;
   }
 
-  function handleSubmit(event: React.FormEvent) {
+  function handleSubmit(
+    event: FormEvent<HTMLFormElement>
+  ) {
     event.preventDefault();
 
     if (!name.trim()) {
-      setError("Candidate name is required.");
+      setError(
+        "Candidate name is required."
+      );
+      return;
+    }
+
+    if (
+      !CANDIDATE_POSITIONS.includes(
+        position as
+          (typeof CANDIDATE_POSITIONS)[number]
+      )
+    ) {
+      setError(
+        "Please select a valid position."
+      );
       return;
     }
 
@@ -79,11 +97,21 @@ export default function CandidateModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="candidate-modal-title"
+    >
       <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
         <div className="mb-6">
-          <h2 className="text-2xl font-bold text-slate-900">
-            {candidate ? "Edit Candidate" : "Add Candidate"}
+          <h2
+            id="candidate-modal-title"
+            className="text-2xl font-bold text-slate-900"
+          >
+            {candidate
+              ? "Edit Candidate"
+              : "Add Candidate"}
           </h2>
 
           <p className="mt-2 text-sm text-slate-600">
@@ -94,7 +122,10 @@ export default function CandidateModal({
         </div>
 
         {error && (
-          <div className="mb-5 rounded-md bg-red-50 px-4 py-3 text-red-700">
+          <div
+            role="alert"
+            className="mb-5 rounded-md bg-red-50 px-4 py-3 text-red-700"
+          >
             {error}
           </div>
         )}
@@ -104,65 +135,107 @@ export default function CandidateModal({
           className="space-y-5"
         >
           <div>
-            <label className="mb-2 block text-sm font-medium">
+            <label
+              htmlFor="candidate-name"
+              className="mb-2 block text-sm font-medium"
+            >
               Full Name
             </label>
 
             <input
+              id="candidate-name"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(event) => {
+                setName(event.target.value);
+                setError("");
+              }}
               disabled={loading}
+              autoFocus
               className="w-full rounded-md border px-4 py-3"
             />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium">
+            <label
+              htmlFor="candidate-position"
+              className="mb-2 block text-sm font-medium"
+            >
               Position
             </label>
 
             <select
+              id="candidate-position"
               value={position}
-              onChange={(e) => setPosition(e.target.value)}
+              onChange={(event) => {
+                setPosition(
+                  event.target.value
+                );
+                setError("");
+              }}
               disabled={loading}
               className="w-full rounded-md border px-4 py-3"
             >
-              {POSITIONS.map((position) => (
-                <option
-                  key={position}
-                  value={position}
-                >
-                  {position}
-                </option>
-              ))}
+              {CANDIDATE_POSITIONS.map(
+                (candidatePosition) => (
+                  <option
+                    key={candidatePosition}
+                    value={candidatePosition}
+                  >
+                    {candidatePosition}
+                  </option>
+                )
+              )}
             </select>
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium">
+            <label
+              htmlFor="candidate-location"
+              className="mb-2 block text-sm font-medium"
+            >
               Location
             </label>
 
             <input
+              id="candidate-location"
               value={location}
-              onChange={(e) => setLocation(e.target.value)}
+              onChange={(event) => {
+                setLocation(
+                  event.target.value
+                );
+                setError("");
+              }}
               disabled={loading}
+              placeholder="Moscow"
               className="w-full rounded-md border px-4 py-3"
             />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium">
+            <label
+              htmlFor="candidate-image"
+              className="mb-2 block text-sm font-medium"
+            >
               Image URL
             </label>
 
             <input
+              id="candidate-image"
+              type="url"
               value={image}
-              onChange={(e) => setImage(e.target.value)}
+              onChange={(event) => {
+                setImage(event.target.value);
+                setError("");
+              }}
               disabled={loading}
               placeholder="https://..."
               className="w-full rounded-md border px-4 py-3"
             />
+
+            <p className="mt-2 text-xs text-slate-500">
+              Optional. Leave blank to use the
+              default placeholder.
+            </p>
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
@@ -170,7 +243,7 @@ export default function CandidateModal({
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="rounded-md border px-4 py-2"
+              className="rounded-md border px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Cancel
             </button>
@@ -178,13 +251,13 @@ export default function CandidateModal({
             <button
               type="submit"
               disabled={loading}
-              className="rounded-md bg-green-700 px-4 py-2 font-semibold text-white hover:bg-green-800"
+              className="rounded-md bg-green-700 px-4 py-2 font-semibold text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading
                 ? "Saving..."
                 : candidate
-                ? "Save Changes"
-                : "Add Candidate"}
+                  ? "Save Changes"
+                  : "Add Candidate"}
             </button>
           </div>
         </form>

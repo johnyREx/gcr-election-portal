@@ -1,7 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import Container from "@/components/layout/Container";
 import Section from "@/components/layout/Section";
@@ -11,10 +15,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-
 import {
+  type AdminCandidate,
+  type Id,
   addCandidate,
-  AdminCandidate,
   deleteCandidate,
   getAdminCandidates,
   updateCandidate,
@@ -22,63 +26,112 @@ import {
 
 import CandidateModal from "./CandidateModal";
 import CandidateTable from "./CandidateTable";
+import type { CandidateFormData } from "./types";
 
-interface CandidateFormData {
-  name: string;
-  position: string;
-  location: string;
-  image: string;
+const POSITION_ORDER = [
+  "President",
+  "Vice President",
+  "General Secretary",
+  "Financial Secretary",
+  "Organizing Secretary",
+  "Public Relations Officer (PRO)",
+  "Women’s Commissioner",
+];
+
+function sortCandidates(
+  candidates: AdminCandidate[]
+): AdminCandidate[] {
+  return [...candidates].sort((a, b) => {
+    const aPositionIndex =
+      POSITION_ORDER.indexOf(a.position);
+
+    const bPositionIndex =
+      POSITION_ORDER.indexOf(b.position);
+
+    const normalizedAIndex =
+      aPositionIndex === -1
+        ? POSITION_ORDER.length
+        : aPositionIndex;
+
+    const normalizedBIndex =
+      bPositionIndex === -1
+        ? POSITION_ORDER.length
+        : bPositionIndex;
+
+    if (normalizedAIndex !== normalizedBIndex) {
+      return normalizedAIndex - normalizedBIndex;
+    }
+
+    return a.name.localeCompare(b.name);
+  });
 }
 
 export default function CandidateManager() {
-  const [candidates, setCandidates] = useState<AdminCandidate[]>([]);
+  const [candidates, setCandidates] = useState<
+    AdminCandidate[]
+  >([]);
   const [search, setSearch] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-
-  const [deletingCandidateId, setDeletingCandidateId] = useState<
-    string | number | null
-  >(null);
-
-  const [isModalOpen, setIsModalOpen] = useState(false);
-
-  const [editingCandidate, setEditingCandidate] =
-    useState<AdminCandidate | null>(null);
-
+  const [isLoading, setIsLoading] =
+    useState(true);
+  const [isSaving, setIsSaving] =
+    useState(false);
+  const [
+    deletingCandidateId,
+    setDeletingCandidateId,
+  ] = useState<Id | null>(null);
+  const [isModalOpen, setIsModalOpen] =
+    useState(false);
+  const [
+    editingCandidate,
+    setEditingCandidate,
+  ] = useState<AdminCandidate | null>(null);
   const [error, setError] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
+  const [successMessage, setSuccessMessage] =
+    useState("");
 
   useEffect(() => {
+    let isMounted = true;
+
     async function loadCandidates() {
       try {
-        const response = await getAdminCandidates();
+        setError("");
 
-        if (!response.success) {
-          setError(response.message || "Unable to load candidates.");
-          return;
+        const response =
+          await getAdminCandidates();
+
+        if (isMounted) {
+          setCandidates(
+            sortCandidates(
+              response.candidates || []
+            )
+          );
         }
-
-        setCandidates(
-          [...response.candidates].sort((a, b) =>
-            a.name.localeCompare(b.name)
-          )
-        );
       } catch (error) {
-        setError(
-          error instanceof Error
-            ? error.message
-            : "Unable to load candidates."
-        );
+        if (isMounted) {
+          setError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load candidates."
+          );
+        }
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     }
 
     loadCandidates();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const filteredCandidates = useMemo(() => {
-    const query = search.trim().toLowerCase();
+    const query = search
+      .trim()
+      .toLowerCase();
 
     if (!query) {
       return candidates;
@@ -86,10 +139,18 @@ export default function CandidateManager() {
 
     return candidates.filter((candidate) => {
       return (
-        candidate.name.toLowerCase().includes(query) ||
-        candidate.position.toLowerCase().includes(query) ||
-        candidate.location.toLowerCase().includes(query) ||
-        String(candidate.id).toLowerCase().includes(query)
+        candidate.name
+          .toLowerCase()
+          .includes(query) ||
+        candidate.position
+          .toLowerCase()
+          .includes(query) ||
+        candidate.location
+          .toLowerCase()
+          .includes(query) ||
+        String(candidate.id)
+          .toLowerCase()
+          .includes(query)
       );
     });
   }, [candidates, search]);
@@ -101,7 +162,9 @@ export default function CandidateManager() {
     setIsModalOpen(true);
   }
 
-  function openEditModal(candidate: AdminCandidate) {
+  function openEditModal(
+    candidate: AdminCandidate
+  ) {
     setEditingCandidate(candidate);
     setError("");
     setSuccessMessage("");
@@ -117,63 +180,81 @@ export default function CandidateManager() {
     setEditingCandidate(null);
   }
 
-  async function handleSave(data: CandidateFormData) {
+  async function handleSave(
+    data: CandidateFormData
+  ) {
     try {
       setIsSaving(true);
       setError("");
       setSuccessMessage("");
 
       if (editingCandidate) {
-        const response = await updateCandidate(
-          editingCandidate.id,
-          data.name,
-          data.position,
-          data.location,
-          data.image
-        );
+        const response =
+          await updateCandidate(
+            editingCandidate.id,
+            data.name,
+            data.position,
+            data.location,
+            data.image
+          );
 
-        if (!response.success || !response.candidate) {
+        if (!response.candidate) {
           setError(
-            response.message || "Unable to update candidate."
+            response.message ||
+              "Unable to update candidate."
           );
           return;
         }
 
-        const updatedCandidate = response.candidate;
+        const updatedCandidate =
+          response.candidate;
 
-        setCandidates((currentCandidates) =>
-          currentCandidates
-            .map((candidate) =>
-              String(candidate.id) === String(updatedCandidate.id)
-                ? updatedCandidate
-                : candidate
+        setCandidates(
+          (currentCandidates) =>
+            sortCandidates(
+              currentCandidates.map(
+                (candidate) =>
+                  String(candidate.id) ===
+                  String(
+                    updatedCandidate.id
+                  )
+                    ? updatedCandidate
+                    : candidate
+              )
             )
-            .sort((a, b) => a.name.localeCompare(b.name))
         );
 
-        setSuccessMessage("Candidate updated successfully.");
+        setSuccessMessage(
+          "Candidate updated successfully."
+        );
       } else {
-        const response = await addCandidate(
-          data.name,
-          data.position,
-          data.location,
-          data.image
-        );
+        const response =
+          await addCandidate(
+            data.name,
+            data.position,
+            data.location,
+            data.image
+          );
 
-        if (!response.success || !response.candidate) {
-          setError(response.message || "Unable to add candidate.");
+        if (!response.candidate) {
+          setError(
+            response.message ||
+              "Unable to add candidate."
+          );
           return;
         }
 
-        const newCandidate = response.candidate;
-
-        setCandidates((currentCandidates) =>
-          [...currentCandidates, newCandidate].sort((a, b) =>
-            a.name.localeCompare(b.name)
-          )
+        setCandidates(
+          (currentCandidates) =>
+            sortCandidates([
+              ...currentCandidates,
+              response.candidate as AdminCandidate,
+            ])
         );
 
-        setSuccessMessage("Candidate added successfully.");
+        setSuccessMessage(
+          "Candidate added successfully."
+        );
       }
 
       setIsModalOpen(false);
@@ -191,7 +272,9 @@ export default function CandidateManager() {
     }
   }
 
-  async function handleDelete(candidate: AdminCandidate) {
+  async function handleDelete(
+    candidate: AdminCandidate
+  ) {
     const confirmed = window.confirm(
       `Delete ${candidate.name} from the ${candidate.position} race?\n\nThis action cannot be undone.`
     );
@@ -205,18 +288,15 @@ export default function CandidateManager() {
       setError("");
       setSuccessMessage("");
 
-      const response = await deleteCandidate(candidate.id);
+      await deleteCandidate(candidate.id);
 
-      if (!response.success) {
-        setError(response.message || "Unable to delete candidate.");
-        return;
-      }
-
-      setCandidates((currentCandidates) =>
-        currentCandidates.filter(
-          (currentCandidate) =>
-            String(currentCandidate.id) !== String(candidate.id)
-        )
+      setCandidates(
+        (currentCandidates) =>
+          currentCandidates.filter(
+            (currentCandidate) =>
+              String(currentCandidate.id) !==
+              String(candidate.id)
+          )
       );
 
       setSuccessMessage(
@@ -262,7 +342,8 @@ export default function CandidateManager() {
             </h1>
 
             <p className="mt-2 text-slate-600">
-              Add, edit and manage election candidates.
+              Add, edit and manage election
+              candidates.
             </p>
           </div>
 
@@ -297,7 +378,9 @@ export default function CandidateManager() {
               <input
                 type="search"
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(event) =>
+                  setSearch(event.target.value)
+                }
                 placeholder="Search candidates..."
                 className="w-full rounded-md border px-4 py-2 outline-none focus:ring-2 focus:ring-green-700 sm:w-72"
               />
@@ -307,7 +390,9 @@ export default function CandidateManager() {
           <CardContent>
             <CandidateTable
               candidates={filteredCandidates}
-              deletingCandidateId={deletingCandidateId}
+              deletingCandidateId={
+                deletingCandidateId
+              }
               onEdit={openEditModal}
               onDelete={handleDelete}
             />

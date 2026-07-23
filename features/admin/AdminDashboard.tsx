@@ -1,10 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 
 import Container from "@/components/layout/Container";
 import Section from "@/components/layout/Section";
+import AdminLogoutButton from "@/features/admin/AdminLogoutButton";
 import {
   Card,
   CardContent,
@@ -227,25 +232,31 @@ export default function AdminDashboard() {
   const isOpen = election?.status === "Open";
   const isClosed =
     election?.status === "Closed";
-  const resultsPublished =
-    Boolean(election?.resultsVisible);
+
+  const resultsPublished = Boolean(
+    election?.resultsVisible
+  );
 
   return (
     <Section className="bg-slate-50">
       <Container>
-        <div className="mb-10">
-          <p className="text-sm font-semibold uppercase tracking-[0.25em] text-green-700">
-            Election Administration
-          </p>
+        <div className="mb-10 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.25em] text-green-700">
+              Election Administration
+            </p>
 
-          <h1 className="mt-3 text-4xl font-bold text-slate-900">
-            Election Control Center
-          </h1>
+            <h1 className="mt-3 text-4xl font-bold text-slate-900">
+              Election Control Center
+            </h1>
 
-          <p className="mt-3 text-slate-600">
-            Monitor turnout, control voting and manage
-            publication of official results.
-          </p>
+            <p className="mt-3 text-slate-600">
+              Monitor turnout, control voting and
+              manage publication of official results.
+            </p>
+          </div>
+
+          <AdminLogoutButton />
         </div>
 
         {error && (

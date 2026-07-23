@@ -1,5 +1,23 @@
 const ELECTION_ID = "gcr-2026";
 
+export interface AdminUser {
+    id: string;
+    username: string;
+    role: string;
+    active: boolean;
+  }
+  
+  interface LoginAdminResponse extends ApiResponse {
+    token?: string;
+    expiresAt?: string;
+    admin?: AdminUser;
+  }
+  
+  interface VerifyAdminSessionResponse extends ApiResponse {
+    expiresAt?: string;
+    admin?: AdminUser;
+  }
+
 interface ApiResponse {
   success: boolean;
   message?: string;
@@ -520,3 +538,32 @@ export async function resetElection(
     confirmation,
   });
 }
+
+export async function loginAdmin(
+    username: string,
+    password: string
+  ): Promise<LoginAdminResponse> {
+    return callElectionApi<LoginAdminResponse>({
+      action: "loginAdmin",
+      username,
+      password,
+    });
+  }
+  
+  export async function verifyAdminSession(
+    adminToken: string
+  ): Promise<VerifyAdminSessionResponse> {
+    return callElectionApi<VerifyAdminSessionResponse>({
+      action: "verifyAdminSession",
+      adminToken,
+    });
+  }
+  
+  export async function logoutAdmin(
+    adminToken: string
+  ): Promise<ApiResponse> {
+    return callElectionApi<ApiResponse>({
+      action: "logoutAdmin",
+      adminToken,
+    });
+  }

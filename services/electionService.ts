@@ -283,36 +283,51 @@ interface GetPollingDashboardResponse extends ApiResponse {
   };
 }
 
-async function callElectionApi<T extends ApiResponse>(
-  body: Record<string, unknown>
-): Promise<T> {
-  const response = await fetch("/api/election", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-    cache: "no-store",
-  });
-
-  let data: T;
-
-  try {
-    data = (await response.json()) as T;
-  } catch {
-    throw new Error(
-      "The election server returned an invalid response."
+function getAdminToken() {
+    if (typeof window === "undefined") {
+      return "";
+    }
+  
+    return (
+      window.sessionStorage.getItem(
+        "gcr-admin-token"
+      ) || ""
     );
   }
 
-  if (!response.ok || !data.success) {
-    throw new Error(
-      data.message || "Election server request failed."
-    );
+  async function callElectionApi<T extends ApiResponse>(
+    body: Record<string, unknown>
+  ): Promise<T> {
+    const response = await fetch("/api/election", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        ...body,
+        adminToken: getAdminToken(),
+      }),
+      cache: "no-store",
+    });
+  
+    let data: T;
+  
+    try {
+      data = (await response.json()) as T;
+    } catch {
+      throw new Error(
+        "The election server returned an invalid response."
+      );
+    }
+  
+    if (!response.ok || !data.success) {
+      throw new Error(
+        data.message || "Election server request failed."
+      );
+    }
+  
+    return data;
   }
-
-  return data;
-}
 
 // Voters
 

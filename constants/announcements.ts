@@ -1,23 +1,23 @@
 export const announcements = [
     {
       id: 1,
-      title: "Election timetable published",
+      title: "2026 Election Timetable Released",
       date: "18 July 2026",
       description:
-        "The official timetable for the GCR General Elections 2026 is now available.",
+        "The Election Committee has officially published the timetable for the 2026 ACGC General Elections. Members are encouraged to review all important dates.",
     },
     {
       id: 2,
-      title: "Nominations opening soon",
+      title: "Nominations Open Soon",
       date: "20 July 2026",
       description:
-        "Eligible community members are encouraged to prepare their nomination documents.",
+        "Eligible members intending to contest are advised to prepare all required nomination documents before nominations officially open.",
     },
     {
       id: 3,
-      title: "Voter register verification",
+      title: "Voter Register Verification",
       date: "25 July 2026",
       description:
-        "Members will be able to confirm their names and personal information before voting.",
+        "Members will have the opportunity to verify their registration details before the commencement of voting.",
     },
   ];

@@ -8,53 +8,62 @@ import {
 } from "react";
 
 import Container from "@/components/layout/Container";
-import Section from "@/components/layout/Section";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-} from "@/components/ui/card";
 import {
   type Election,
   getElection,
 } from "@/services/electionService";
 
-function getStatusClasses(status?: string) {
+function getStatusConfig(status?: string) {
   switch (status) {
     case "Open":
-      return "border-green-200 bg-green-100 text-green-800";
+      return {
+        label: "Polls Open",
+        message:
+          "Voting is currently open. Eligible voters may proceed to the secure voting portal and cast their ballots.",
+        dot: "bg-green-500",
+        badge:
+          "border-green-200 bg-green-50 text-green-800",
+      };
 
     case "Closed":
-      return "border-red-200 bg-red-100 text-red-800";
+      return {
+        label: "Voting Closed",
+        message:
+          "Voting has officially closed. Please await further communication from the Electoral Commission.",
+        dot: "bg-red-500",
+        badge:
+          "border-red-200 bg-red-50 text-red-800",
+      };
 
     case "Results Published":
-      return "border-blue-200 bg-blue-100 text-blue-800";
+      return {
+        label: "Results Published",
+        message:
+          "The election has concluded and the official results are now available.",
+        dot: "bg-blue-500",
+        badge:
+          "border-blue-200 bg-blue-50 text-blue-800",
+      };
 
     case "Draft":
-      return "border-slate-200 bg-slate-100 text-slate-700";
+      return {
+        label: "Election Preparation",
+        message:
+          "Election preparations are currently underway. Official updates will be published as they become available.",
+        dot: "bg-slate-400",
+        badge:
+          "border-slate-200 bg-slate-50 text-slate-700",
+      };
 
     default:
-      return "border-amber-200 bg-amber-100 text-amber-800";
-  }
-}
-
-function getStatusMessage(status?: string) {
-  switch (status) {
-    case "Open":
-      return "Voting is currently open. Eligible voters may proceed to cast their ballots.";
-
-    case "Closed":
-      return "Voting has closed. Please wait for the official publication of results.";
-
-    case "Results Published":
-      return "Voting has concluded and the official election results are now available.";
-
-    case "Draft":
-      return "Election preparations are currently underway.";
-
-    default:
-      return "Election information is being updated.";
+      return {
+        label: "Election Update",
+        message:
+          "Official election information is currently being updated.",
+        dot: "bg-amber-500",
+        badge:
+          "border-amber-200 bg-amber-50 text-amber-800",
+      };
   }
 }
 
@@ -89,161 +98,189 @@ export default function CurrentElection() {
     loadElection();
   }, [loadElection]);
 
+  const status = getStatusConfig(
+    election?.status
+  );
+
   const isOpen = election?.status === "Open";
+
   const resultsPublished =
+    election?.status === "Results Published" ||
     Boolean(election?.resultsVisible);
 
   return (
-    <Section className="bg-slate-50">
+    <section className="border-b border-slate-200 bg-slate-50 py-10 sm:py-12">
       <Container>
-        <div className="mx-auto mb-10 max-w-2xl text-center">
-          <p className="text-sm font-semibold uppercase tracking-[0.25em] text-green-700">
-            Election Update
-          </p>
+        <div className="mx-auto max-w-6xl">
+          {isLoading ? (
+            <div className="rounded-2xl border border-slate-200 bg-white px-6 py-8 shadow-sm">
+              <div className="flex items-center gap-3">
+                <span className="h-3 w-3 animate-pulse rounded-full bg-green-600" />
 
-          <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-            Current Election
-          </h2>
-
-          <p className="mt-4 text-slate-600">
-            Follow the status of the GCR General
-            Elections and access the official voting
-            portal.
-          </p>
-        </div>
-
-        <Card className="mx-auto max-w-5xl overflow-hidden border-slate-200 shadow-sm">
-          <CardContent className="p-0">
-            <div className="grid lg:grid-cols-[1.4fr_0.6fr]">
-              <div className="p-7 sm:p-9">
-                {isLoading ? (
-                  <p className="text-slate-600">
-                    Loading election information...
-                  </p>
-                ) : error ? (
-                  <div>
-                    <p className="font-semibold text-red-700">
-                      Election information unavailable
-                    </p>
-
-                    <p className="mt-2 text-sm text-slate-600">
-                      {error}
-                    </p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-slate-500">
-                          Official Election
-                        </p>
-
-                        <h3 className="mt-1 text-2xl font-bold text-slate-900">
-                          {election?.title ||
-                            "GCR General Elections 2026"}
-                        </h3>
-                      </div>
-
-                      <Badge
-                        variant="outline"
-                        className={`w-fit rounded-full px-4 py-2 text-sm font-bold ${getStatusClasses(
-                          election?.status
-                        )}`}
-                      >
-                        {election?.status ||
-                          "Status unavailable"}
-                      </Badge>
-                    </div>
-
-                    <p className="mt-6 max-w-2xl leading-7 text-slate-600">
-                      {getStatusMessage(
-                        election?.status
-                      )}
-                    </p>
-
-                    <div className="mt-7 grid gap-4 sm:grid-cols-2">
-                      <div className="rounded-xl bg-slate-50 p-4">
-                        <p className="text-sm text-slate-500">
-                          Voting period
-                        </p>
-
-                        <p className="mt-1 font-semibold text-slate-900">
-                          21–22 November 2026
-                        </p>
-                      </div>
-
-                      <div className="rounded-xl bg-slate-50 p-4">
-                        <p className="text-sm text-slate-500">
-                          Winning requirement
-                        </p>
-
-                        <p className="mt-1 font-semibold text-slate-900">
-                          50% + 1 of valid votes
-                        </p>
-                      </div>
-                    </div>
-                  </>
-                )}
+                <p className="font-semibold text-slate-600">
+                  Loading official election status...
+                </p>
               </div>
+            </div>
+          ) : error ? (
+            <div className="rounded-2xl border border-red-200 bg-white px-6 py-7 shadow-sm">
+              <p className="font-bold text-red-700">
+                Election information unavailable
+              </p>
 
-              <div className="flex flex-col justify-center border-t bg-slate-900 p-7 text-white sm:p-9 lg:border-l lg:border-t-0">
-                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-green-300">
-                  Election Access
-                </p>
+              <p className="mt-2 text-sm text-slate-600">
+                {error}
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div className="grid lg:grid-cols-[1fr_auto]">
+                <div className="p-6 sm:p-8">
+                  <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div className="flex items-center gap-3">
+                        <span className="relative flex h-3 w-3">
+                          {isOpen && (
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-50" />
+                          )}
 
-                <h3 className="mt-3 text-2xl font-bold">
-                  Make your voice count.
-                </h3>
+                          <span
+                            className={`relative inline-flex h-3 w-3 rounded-full ${status.dot}`}
+                          />
+                        </span>
 
-                <p className="mt-3 text-sm leading-6 text-slate-300">
-                  Verify your voter information,
-                  complete your ballot and submit it
-                  securely.
-                </p>
+                        <p className="text-xs font-bold uppercase tracking-[0.2em] text-green-700">
+                          Live Election Status
+                        </p>
+                      </div>
 
-                <div className="mt-7 space-y-3">
-                  {isOpen ? (
-                    <Button
-                      asChild
-                      className="w-full bg-green-600 hover:bg-green-700"
+                      <h2 className="mt-4 text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">
+                        {election?.title ||
+                          "GCR General Elections 2026"}
+                      </h2>
+
+                      <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
+                        {status.message}
+                      </p>
+                    </div>
+
+                    <span
+                      className={`w-fit shrink-0 rounded-full border px-4 py-2 text-xs font-bold uppercase tracking-wider ${status.badge}`}
                     >
-                      <Link href="/vote">
+                      {status.label}
+                    </span>
+                  </div>
+
+                  <div className="mt-7 grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                        Election Day
+                      </p>
+
+                      <p className="mt-1 font-bold text-slate-900">
+                        22 November 2026
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                        Current Status
+                      </p>
+
+                      <p className="mt-1 font-bold text-slate-900">
+                        {election?.status ||
+                          "Unavailable"}
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                        Winning Requirement
+                      </p>
+
+                      <p className="mt-1 font-bold text-slate-900">
+                        50% + 1
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex min-w-[260px] flex-col justify-center border-t border-slate-200 bg-slate-950 p-6 text-white sm:p-8 lg:border-l lg:border-t-0">
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-green-400">
+                    Election Access
+                  </p>
+
+                  {isOpen ? (
+                    <>
+                      <h3 className="mt-3 text-xl font-bold">
+                        Voting is open
+                      </h3>
+
+                      <p className="mt-2 text-sm leading-6 text-slate-400">
+                        Verify your details and proceed
+                        to your ballot.
+                      </p>
+
+                      <Link
+                        href="/vote"
+                        className="mt-5 inline-flex h-11 items-center justify-center rounded-lg bg-green-600 px-5 text-sm font-bold text-white transition hover:bg-green-500"
+                      >
                         Vote Now
                       </Link>
-                    </Button>
+                    </>
                   ) : resultsPublished ? (
-                    <Button
-                      asChild
-                      className="w-full bg-blue-600 hover:bg-blue-700"
-                    >
-                      <Link href="/results">
-                        View Official Results
+                    <>
+                      <h3 className="mt-3 text-xl font-bold">
+                        Results available
+                      </h3>
+
+                      <p className="mt-2 text-sm leading-6 text-slate-400">
+                        View the officially published
+                        election results.
+                      </p>
+
+                      <Link
+                        href="/results"
+                        className="mt-5 inline-flex h-11 items-center justify-center rounded-lg bg-blue-600 px-5 text-sm font-bold text-white transition hover:bg-blue-500"
+                      >
+                        View Results
                       </Link>
-                    </Button>
+                    </>
                   ) : (
-                    <Button
-                      disabled
-                      className="w-full"
-                    >
-                      Voting Not Open
-                    </Button>
+                    <>
+                      <h3 className="mt-3 text-xl font-bold">
+                        Follow the election
+                      </h3>
+
+                      <p className="mt-2 text-sm leading-6 text-slate-400">
+                        Review official election
+                        information and important
+                        updates.
+                      </p>
+
+                      <Link
+                        href="/elections"
+                        className="mt-5 inline-flex h-11 items-center justify-center rounded-lg bg-white px-5 text-sm font-bold text-slate-950 transition hover:bg-slate-100"
+                      >
+                        Election Details
+                      </Link>
+                    </>
                   )}
 
-                  <Button
-                    asChild
-                    variant="outline"
-                    className="w-full border-slate-600 bg-transparent text-white hover:bg-slate-800 hover:text-white"
-                  >
-                    <Link href="/elections">
-                      Election Details
+                  {isOpen && (
+                    <Link
+                      href="/elections"
+                      className="mt-3 text-center text-xs font-semibold text-slate-400 transition hover:text-white"
+                    >
+                      View election details →
                     </Link>
-                  </Button>
+                  )}
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          )}
+        </div>
       </Container>
-    </Section>
+    </section>
   );
 }

@@ -3,7 +3,6 @@ import CurrentElection from "@/features/home/CurrentElection";
 import CandidatePreview from "@/features/home/CandidatePreview";
 import ElectionTimeline from "@/features/home/ElectionTimeline";
 import Announcements from "@/features/home/Announcements";
-import QuickLinks from "@/features/home/QuickLinks";
 import AfricanLeadersTrivia from "@/features/home/AfricanLeadersTrivia";
 
 export default function Home() {
@@ -14,7 +13,6 @@ export default function Home() {
       <CandidatePreview />
       <ElectionTimeline />
       <Announcements />
-      <QuickLinks />
       <AfricanLeadersTrivia />
     </>
   );

@@ -10,31 +10,23 @@ import {
 import Container from "@/components/layout/Container";
 import Section from "@/components/layout/Section";
 import AdminLogoutButton from "@/features/admin/AdminLogoutButton";
+
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+
 import {
   type Election,
+  type ElectionReadiness,
   type TurnoutSummary,
   closeElection,
   getAnalytics,
   getElection,
-  hideElectionResults,
-  openElection,
-  publishElectionResults,
-  resetElection,
+  getElectionReadiness,
 } from "@/services/electionService";
-
-type AdminAction =
-  | "open"
-  | "close"
-  | "publish"
-  | "hide"
-  | "reset"
-  | null;
 
 function getStatusClasses(status?: string) {
   switch (status) {
@@ -47,7 +39,6 @@ function getStatusClasses(status?: string) {
     case "Results Published":
       return "bg-blue-100 text-blue-700";
 
-    case "Draft":
     default:
       return "bg-slate-100 text-slate-700";
   }
@@ -60,11 +51,17 @@ export default function AdminDashboard() {
   const [summary, setSummary] =
     useState<TurnoutSummary | null>(null);
 
+  const [readiness, setReadiness] =
+    useState<ElectionReadiness | null>(null);
+
   const [isLoading, setIsLoading] =
     useState(true);
 
-  const [activeAction, setActiveAction] =
-    useState<AdminAction>(null);
+  const [isRefreshing, setIsRefreshing] =
+    useState(false);
+
+  const [isClosing, setIsClosing] =
+    useState(false);
 
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] =
@@ -77,9 +74,11 @@ export default function AdminDashboard() {
       const [
         electionResponse,
         analyticsResponse,
+        readinessResponse,
       ] = await Promise.all([
         getElection(),
         getAnalytics(),
+        getElectionReadiness(),
       ]);
 
       setElection(
@@ -89,11 +88,15 @@ export default function AdminDashboard() {
       setSummary(
         analyticsResponse.analytics.summary
       );
+
+      setReadiness(
+        readinessResponse.readiness
+      );
     } catch (error) {
       setError(
         error instanceof Error
           ? error.message
-          : "Unable to load admin dashboard."
+          : "Unable to load dashboard."
       );
     } finally {
       setIsLoading(false);
@@ -104,116 +107,48 @@ export default function AdminDashboard() {
     loadDashboard();
   }, [loadDashboard]);
 
-  async function runElectionAction(
-    action: Exclude<AdminAction, null>,
-    callback: () => Promise<unknown>,
-    successText: string
-  ) {
+  async function handleRefresh() {
+    setIsRefreshing(true);
+
+    await loadDashboard();
+
+    setIsRefreshing(false);
+  }
+
+  async function handleCloseElection() {
+    if (election?.status !== "Open") {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Close this election?\n\nVoters will no longer be able to submit ballots."
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
     try {
-      setActiveAction(action);
+      setIsClosing(true);
       setError("");
       setSuccessMessage("");
 
-      await callback();
+      await closeElection();
 
-      setSuccessMessage(successText);
+      setSuccessMessage(
+        "Election closed successfully."
+      );
+
       await loadDashboard();
     } catch (error) {
       setError(
         error instanceof Error
           ? error.message
-          : "Unable to complete the election action."
+          : "Unable to close election."
       );
     } finally {
-      setActiveAction(null);
+      setIsClosing(false);
     }
-  }
-
-  async function handleOpenElection() {
-    const confirmed = window.confirm(
-      "Open the election now?\n\nEligible voters will immediately be able to cast ballots."
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    await runElectionAction(
-      "open",
-      openElection,
-      "Election opened successfully."
-    );
-  }
-
-  async function handleCloseElection() {
-    const confirmed = window.confirm(
-      "Close the election now?\n\nVoters will no longer be able to submit ballots."
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    await runElectionAction(
-      "close",
-      closeElection,
-      "Election closed successfully."
-    );
-  }
-
-  async function handlePublishResults() {
-    const confirmed = window.confirm(
-      "Publish the election results?\n\nCandidate totals and outcomes will immediately become visible on the public results page."
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    await runElectionAction(
-      "publish",
-      publishElectionResults,
-      "Election results published successfully."
-    );
-  }
-
-  async function handleHideResults() {
-    const confirmed = window.confirm(
-      "Hide the election results from the public results page?"
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    await runElectionAction(
-      "hide",
-      hideElectionResults,
-      "Election results are now hidden."
-    );
-  }
-
-  async function handleResetElection() {
-    const confirmation = window.prompt(
-      "This will erase all recorded votes and allow every voter to vote again.\n\nType RESET to continue."
-    );
-
-    if (confirmation === null) {
-      return;
-    }
-
-    if (confirmation.trim() !== "RESET") {
-      window.alert(
-        "Reset cancelled. You must type RESET exactly."
-      );
-      return;
-    }
-
-    await runElectionAction(
-      "reset",
-      () => resetElection("RESET"),
-      "Election reset successfully."
-    );
   }
 
   if (isLoading) {
@@ -221,25 +156,47 @@ export default function AdminDashboard() {
       <Section>
         <Container>
           <p className="text-center text-slate-600">
-            Loading admin dashboard...
+            Loading election administration...
           </p>
         </Container>
       </Section>
     );
   }
 
-  const isBusy = activeAction !== null;
+  const isDraft = election?.status === "Draft";
   const isOpen = election?.status === "Open";
-  const isClosed =
-    election?.status === "Closed";
 
   const resultsPublished = Boolean(
     election?.resultsVisible
   );
 
+  const registeredVoters =
+    readiness?.registeredVoters ?? 0;
+
+  const registeredCandidates =
+    readiness?.registeredCandidates ?? 0;
+
+  const accessCodesIssued =
+    readiness?.accessCodesIssued ?? 0;
+
+  const accessCodesRequired =
+    readiness?.accessCodesRequired ?? 0;
+
+  const accessCodeProgress =
+    accessCodesRequired > 0
+      ? Math.min(
+          100,
+          (accessCodesIssued /
+            accessCodesRequired) *
+            100
+        )
+      : 0;
+
   return (
     <Section className="bg-slate-50">
       <Container>
+        {/* HEADER */}
+
         <div className="mb-10 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.25em] text-green-700">
@@ -251,13 +208,28 @@ export default function AdminDashboard() {
             </h1>
 
             <p className="mt-3 text-slate-600">
-              Monitor turnout, control voting and
-              manage publication of official results.
+              Manage election readiness, monitor
+              turnout and oversee election operations.
             </p>
           </div>
 
-          <AdminLogoutButton />
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="rounded-md border border-slate-300 bg-white px-4 py-2 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              {isRefreshing
+                ? "Refreshing..."
+                : "Refresh"}
+            </button>
+
+            <AdminLogoutButton />
+          </div>
         </div>
+
+        {/* MESSAGES */}
 
         {error && (
           <div
@@ -274,24 +246,24 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {/* ELECTION STATUS */}
+
         <Card className="mb-8">
           <CardHeader>
-            <CardTitle>
-              Election Status
-            </CardTitle>
+            <CardTitle>Election Status</CardTitle>
           </CardHeader>
 
           <CardContent>
             <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <p className="text-xl font-semibold text-slate-900">
+                <h2 className="text-xl font-semibold text-slate-900">
                   {election?.title ||
-                    "GCR General Elections 2026"}
-                </p>
+                    "Election unavailable"}
+                </h2>
 
                 <p className="mt-1 text-sm text-slate-500">
                   Election ID:{" "}
-                  {election?.id || "gcr-2026"}
+                  {election?.id || "Unavailable"}
                 </p>
 
                 <div className="mt-4 flex flex-wrap gap-3">
@@ -300,8 +272,7 @@ export default function AdminDashboard() {
                       election?.status
                     )}`}
                   >
-                    {election?.status ||
-                      "Unknown"}
+                    {election?.status || "Unknown"}
                   </span>
 
                   <span
@@ -322,115 +293,211 @@ export default function AdminDashboard() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <button
                   type="button"
-                  onClick={handleOpenElection}
-                  disabled={isBusy || isOpen}
-                  className="rounded-md bg-green-700 px-5 py-3 font-semibold text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled
+                  title="Election opening is disabled pending security verification."
+                  className="cursor-not-allowed rounded-md bg-green-700 px-5 py-3 font-semibold text-white opacity-50"
                 >
-                  {activeAction === "open"
-                    ? "Opening..."
-                    : "Open Election"}
+                  Open Election
                 </button>
 
                 <button
                   type="button"
                   onClick={handleCloseElection}
-                  disabled={isBusy || isClosed}
+                  disabled={!isOpen || isClosing}
                   className="rounded-md bg-slate-800 px-5 py-3 font-semibold text-white hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {activeAction === "close"
+                  {isClosing
                     ? "Closing..."
                     : "Close Election"}
                 </button>
 
                 <button
                   type="button"
-                  onClick={handlePublishResults}
-                  disabled={
-                    isBusy || resultsPublished
-                  }
-                  className="rounded-md bg-blue-700 px-5 py-3 font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled
+                  title="Results certification has not been implemented."
+                  className="cursor-not-allowed rounded-md bg-blue-700 px-5 py-3 font-semibold text-white opacity-50"
                 >
-                  {activeAction === "publish"
-                    ? "Publishing..."
-                    : "Publish Results"}
+                  Publish Results
                 </button>
 
                 <button
                   type="button"
-                  onClick={handleHideResults}
-                  disabled={
-                    isBusy || !resultsPublished
-                  }
-                  className="rounded-md border border-amber-300 px-5 py-3 font-semibold text-amber-800 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled
+                  title="Published results cannot be silently hidden."
+                  className="cursor-not-allowed rounded-md border border-amber-300 px-5 py-3 font-semibold text-amber-800 opacity-50"
                 >
-                  {activeAction === "hide"
-                    ? "Hiding..."
-                    : "Hide Results"}
+                  Hide Results
                 </button>
               </div>
             </div>
           </CardContent>
         </Card>
 
+        {/* READINESS */}
+
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle>
+              Election Readiness
+            </CardTitle>
+          </CardHeader>
+
+          <CardContent>
+            {!readiness ? (
+              <p className="text-slate-500">
+                Readiness information is unavailable.
+              </p>
+            ) : (
+              <>
+                <div className="mb-6 flex flex-wrap items-center gap-3">
+                  <span
+                    className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                      readiness.ready
+                        ? "bg-green-100 text-green-700"
+                        : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {readiness.ready
+                      ? "Ready to Open"
+                      : "Not Ready"}
+                  </span>
+
+                  {!readiness.openingEnabled && (
+                    <span className="rounded-full bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-800">
+                      Security Lock Active
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="rounded-xl bg-slate-50 p-5">
+                    <p className="text-sm text-slate-500">
+                      Registered Voters
+                    </p>
+
+                    <p className="mt-2 text-3xl font-bold">
+                      {registeredVoters}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl bg-slate-50 p-5">
+                    <p className="text-sm text-slate-500">
+                      Candidates
+                    </p>
+
+                    <p className="mt-2 text-3xl font-bold">
+                      {registeredCandidates}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl bg-slate-50 p-5">
+                    <p className="text-sm text-slate-500">
+                      Access Codes
+                    </p>
+
+                    <p className="mt-2 text-3xl font-bold">
+                      {accessCodesIssued}
+                      <span className="text-lg text-slate-400">
+                        /{accessCodesRequired}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6">
+                  <div className="mb-2 flex justify-between text-sm">
+                    <span className="font-medium text-slate-700">
+                      Access-code distribution
+                    </span>
+
+                    <span className="text-slate-500">
+                      {Math.round(accessCodeProgress)}%
+                    </span>
+                  </div>
+
+                  <div className="h-3 overflow-hidden rounded-full bg-slate-200">
+                    <div
+                      className="h-full rounded-full bg-green-600 transition-all"
+                      style={{
+                        width: `${accessCodeProgress}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {readiness.issues.length > 0 && (
+                  <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-5">
+                    <h3 className="font-semibold text-amber-900">
+                      Outstanding Requirements
+                    </h3>
+
+                    <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-amber-900">
+                      {readiness.issues.map(
+                        (issue, index) => (
+                          <li key={`${issue}-${index}`}>
+                            {issue}
+                          </li>
+                        )
+                      )}
+                    </ul>
+                  </div>
+                )}
+
+                {isDraft && (
+                  <div className="mt-6">
+                    <Link
+                      href="/admin/voters"
+                      className="inline-flex rounded-md bg-green-700 px-5 py-3 font-semibold text-white hover:bg-green-800"
+                    >
+                      Manage Voter Access Codes →
+                    </Link>
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* TURNOUT */}
+
         {summary && (
           <div className="mb-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base text-slate-600">
-                  Registered Voters
-                </CardTitle>
-              </CardHeader>
+            {[
+              {
+                label: "Registered Voters",
+                value: summary.registeredVoters,
+              },
+              {
+                label: "Votes Cast",
+                value: summary.votesCast,
+              },
+              {
+                label: "Remaining Voters",
+                value: summary.remainingVoters,
+              },
+              {
+                label: "Turnout",
+                value: `${summary.turnoutPercentage}%`,
+              },
+            ].map((item) => (
+              <Card key={item.label}>
+                <CardHeader>
+                  <CardTitle className="text-base text-slate-600">
+                    {item.label}
+                  </CardTitle>
+                </CardHeader>
 
-              <CardContent>
-                <p className="text-4xl font-bold text-slate-900">
-                  {summary.registeredVoters}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base text-slate-600">
-                  Votes Cast
-                </CardTitle>
-              </CardHeader>
-
-              <CardContent>
-                <p className="text-4xl font-bold text-slate-900">
-                  {summary.votesCast}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base text-slate-600">
-                  Remaining Voters
-                </CardTitle>
-              </CardHeader>
-
-              <CardContent>
-                <p className="text-4xl font-bold text-slate-900">
-                  {summary.remainingVoters}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base text-slate-600">
-                  Turnout
-                </CardTitle>
-              </CardHeader>
-
-              <CardContent>
-                <p className="text-4xl font-bold text-green-700">
-                  {summary.turnoutPercentage}%
-                </p>
-              </CardContent>
-            </Card>
+                <CardContent>
+                  <p className="text-4xl font-bold text-slate-900">
+                    {item.value}
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         )}
+
+        {/* OPERATIONS */}
 
         <div className="grid gap-8 lg:grid-cols-[2fr_1fr]">
           <Card>
@@ -441,88 +508,68 @@ export default function AdminDashboard() {
             </CardHeader>
 
             <CardContent className="grid gap-4 sm:grid-cols-2">
-              <Link
-                href="/admin/voters"
-                className="rounded-xl border p-5 transition hover:border-green-300 hover:bg-green-50"
-              >
-                <p className="font-semibold text-slate-900">
-                  Manage Voters
-                </p>
+              {[
+                {
+                  href: "/admin/voters",
+                  title: "Manage Voters",
+                  description:
+                    "Manage registered voters and access codes.",
+                },
+                {
+                  href: "/admin/candidates",
+                  title: "Manage Candidates",
+                  description:
+                    "Manage candidates, positions and running mates.",
+                },
+                {
+                  href: "/admin/results",
+                  title: "Preview Results",
+                  description:
+                    "View administrative election results.",
+                },
+                {
+                  href: "/results",
+                  title: "Public Results",
+                  description:
+                    "Preview the public results page.",
+                },
+              ].map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="rounded-xl border p-5 transition hover:border-green-300 hover:bg-green-50"
+                >
+                  <p className="font-semibold text-slate-900">
+                    {item.title}
+                  </p>
 
-                <p className="mt-2 text-sm text-slate-500">
-                  Add, edit and import eligible
-                  voters.
-                </p>
-              </Link>
-
-              <Link
-                href="/admin/candidates"
-                className="rounded-xl border p-5 transition hover:border-green-300 hover:bg-green-50"
-              >
-                <p className="font-semibold text-slate-900">
-                  Manage Candidates
-                </p>
-
-                <p className="mt-2 text-sm text-slate-500">
-                  Add, edit and organize candidates
-                  by position.
-                </p>
-              </Link>
-
-              <Link
-                href="/admin/results"
-                className="rounded-xl border p-5 transition hover:border-blue-300 hover:bg-blue-50"
-              >
-                <p className="font-semibold text-slate-900">
-                  Preview Results
-                </p>
-
-                <p className="mt-2 text-sm text-slate-500">
-                  View administrative results before
-                  public publication.
-                </p>
-              </Link>
-
-              <Link
-                href="/results"
-                className="rounded-xl border p-5 transition hover:border-slate-300 hover:bg-slate-50"
-              >
-                <p className="font-semibold text-slate-900">
-                  Public Results Page
-                </p>
-
-                <p className="mt-2 text-sm text-slate-500">
-                  Check exactly what the public can
-                  currently see.
-                </p>
-              </Link>
+                  <p className="mt-2 text-sm text-slate-500">
+                    {item.description}
+                  </p>
+                </Link>
+              ))}
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
               <CardTitle>
-                Danger Zone
+                System Security
               </CardTitle>
             </CardHeader>
 
             <CardContent>
-              <p className="mb-5 text-sm text-slate-600">
-                Resetting removes all test vote records
-                and clears every voter&apos;s voting
-                status.
+              <p className="text-sm text-slate-600">
+                Election opening, voting and results
+                publication remain restricted until
+                their security and integrity checks
+                are complete.
               </p>
 
-              <button
-                type="button"
-                onClick={handleResetElection}
-                disabled={isBusy}
-                className="w-full rounded-md border border-red-300 px-4 py-3 text-left font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {activeAction === "reset"
-                  ? "Resetting election..."
-                  : "Reset test election"}
-              </button>
+              <div className="mt-5 rounded-lg bg-amber-50 p-4 text-sm font-medium text-amber-800">
+                Protected election controls are
+                currently locked.
+              </div>
             </CardContent>
           </Card>
         </div>

@@ -1,329 +1,374 @@
+"use client";
+
+import { FormEvent, useState } from "react";
 import {
-    FormEvent,
-    useEffect,
-    useState,
-  } from "react";
-  
-  import { Button } from "@/components/ui/button";
-  import {
-    Card,
-    CardContent,
-    CardHeader,
-    CardTitle,
-  } from "@/components/ui/card";
-  import { Input } from "@/components/ui/input";
-  import {
-    type Id,
-    type VoterSearchResult,
-    searchVoters,
-    verifyVoter,
-  } from "@/services/electionService";
-  
-  interface VerificationFormProps {
-    onVerified: (voter: {
-      id: Id;
-      name: string;
-    }) => void;
-  }
-  
-  export default function VerificationForm({
-    onVerified,
-  }: VerificationFormProps) {
-    const [searchTerm, setSearchTerm] = useState("");
-    const [matchingVoters, setMatchingVoters] = useState<
-      VoterSearchResult[]
-    >([]);
-    const [selectedVoter, setSelectedVoter] =
-      useState<VoterSearchResult | null>(null);
-    const [contact, setContact] = useState("");
-    const [error, setError] = useState("");
-    const [isSearching, setIsSearching] =
-      useState(false);
-    const [isVerifying, setIsVerifying] =
-      useState(false);
-    const [hasCompletedSearch, setHasCompletedSearch] =
-      useState(false);
-  
-    useEffect(() => {
-      const query = searchTerm.trim();
-  
-      if (query.length < 2 || selectedVoter) {
-        setMatchingVoters([]);
-        setHasCompletedSearch(false);
-        return;
-      }
-  
-      const controller = new AbortController();
-  
-      const timeout = window.setTimeout(async () => {
-        try {
-          setIsSearching(true);
-          setError("");
-          setHasCompletedSearch(false);
-  
-          const response = await searchVoters(query);
-  
-          if (controller.signal.aborted) {
-            return;
-          }
-  
-          setMatchingVoters(response.voters || []);
-          setHasCompletedSearch(true);
-        } catch (error) {
-          if (controller.signal.aborted) {
-            return;
-          }
-  
-          setMatchingVoters([]);
-          setHasCompletedSearch(true);
-          setError(
-            error instanceof Error
-              ? error.message
-              : "Unable to search for voters."
-          );
-        } finally {
-          if (!controller.signal.aborted) {
-            setIsSearching(false);
-          }
-        }
-      }, 400);
-  
-      return () => {
-        controller.abort();
-        window.clearTimeout(timeout);
-      };
-    }, [searchTerm, selectedVoter]);
-  
-    function clearSelectedVoter() {
-      setSelectedVoter(null);
-      setSearchTerm("");
-      setContact("");
-      setMatchingVoters([]);
-      setError("");
-      setHasCompletedSearch(false);
+  LockKeyhole,
+  ShieldCheck,
+  Vote,
+} from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { config } from "@/lib/config";
+
+interface VerifiedVoter {
+  id: string;
+  name: string;
+}
+
+interface VotingSession {
+  token: string;
+  expiresAt: string;
+}
+
+interface VerificationFormProps {
+  onVerified: (
+    voter: VerifiedVoter,
+    session: VotingSession
+  ) => void;
+}
+
+interface VotingSessionResponse {
+  success: boolean;
+  message?: string;
+  code?: string;
+  electionId?: string;
+  voter?: {
+    name: string;
+  };
+  sessionToken?: string;
+  session?: {
+    expiresAt: string;
+  };
+}
+
+function formatAccessCode(value: string): string {
+  const cleaned = value
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 18);
+
+  return [
+    cleaned.slice(0, 6),
+    cleaned.slice(6, 10),
+    cleaned.slice(10, 14),
+    cleaned.slice(14, 18),
+  ]
+    .filter(Boolean)
+    .join("-");
+}
+
+export default function VerificationForm({
+  onVerified,
+}: VerificationFormProps) {
+  const [accessCode, setAccessCode] = useState("");
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+
+    if (isVerifying) {
+      return;
     }
-  
-    async function handleSubmit(
-      event: FormEvent<HTMLFormElement>
+
+    setError("");
+    setNotice("");
+
+    const normalizedCode = accessCode
+      .replace(/-/g, "")
+      .trim()
+      .toUpperCase();
+
+    if (
+      !/^[A-Z]{6}[A-Z0-9]{12}$/.test(
+        normalizedCode
+      )
     ) {
-      event.preventDefault();
-      setError("");
-  
-      if (!selectedVoter) {
-        setError(
-          "Please search for and select your name."
-        );
-        return;
-      }
-  
-      const normalizedContact = contact.trim();
-  
-      if (!normalizedContact) {
-        setError(
-          "Please enter the email address or phone number registered with the organization."
-        );
-        return;
-      }
-  
-      try {
-        setIsVerifying(true);
-  
-        const response = await verifyVoter(
-          selectedVoter.id,
-          normalizedContact
-        );
-  
-        if (!response.voter) {
-          setError(
-            response.message ||
-              "Voter verification failed."
-          );
-          return;
-        }
-  
-        onVerified({
-          id: response.voter.id,
-          name: response.voter.name,
-        });
-      } catch (error) {
-        setError(
-          error instanceof Error
-            ? error.message
-            : "Voter verification failed."
-        );
-      } finally {
-        setIsVerifying(false);
-      }
+      setError(
+        "Please enter a valid 18-character voter access code."
+      );
+      return;
     }
-  
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Voter Verification</CardTitle>
-  
-          <p className="text-sm text-slate-600">
-            Find your name and verify yourself using
-            the email address or phone number registered
-            with the organization.
-          </p>
-        </CardHeader>
-  
-        <CardContent>
-          <form
-            onSubmit={handleSubmit}
-            className="space-y-6"
-          >
-            <div className="relative">
-              <label
-                htmlFor="voter-search"
-                className="mb-2 block text-sm font-medium"
-              >
-                Search your name
-              </label>
-  
-              <Input
-                id="voter-search"
-                type="search"
-                placeholder="Start typing your full name"
-                value={searchTerm}
-                autoComplete="off"
-                disabled={Boolean(selectedVoter)}
-                onChange={(event) => {
-                  setSearchTerm(event.target.value);
-                  setSelectedVoter(null);
-                  setError("");
-                  setHasCompletedSearch(false);
-                }}
-              />
-  
-              {selectedVoter && (
-                <div className="mt-3 flex items-center justify-between rounded-lg border border-green-200 bg-green-50 px-4 py-3">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-green-700">
-                      Selected voter
-                    </p>
-  
-                    <p className="font-semibold text-slate-900">
-                      {selectedVoter.name}
-                    </p>
-  
-                    {selectedVoter.location && (
-                      <p className="text-sm text-slate-600">
-                        {selectedVoter.location}
-                      </p>
-                    )}
-                  </div>
-  
-                  <button
-                    type="button"
-                    className="text-sm font-semibold text-green-800 hover:underline"
-                    onClick={clearSelectedVoter}
-                  >
-                    Change
-                  </button>
-                </div>
-              )}
-  
-              {isSearching && (
-                <p className="mt-2 text-sm text-slate-500">
-                  Searching voter register...
-                </p>
-              )}
-  
-              {!isSearching &&
-                matchingVoters.length > 0 &&
-                !selectedVoter && (
-                  <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-md border bg-white shadow-lg">
-                    {matchingVoters.map((voter) => (
-                      <button
-                        key={String(voter.id)}
-                        type="button"
-                        className="block w-full border-b px-4 py-3 text-left text-sm last:border-b-0 hover:bg-slate-50"
-                        onClick={() => {
-                          setSelectedVoter(voter);
-                          setSearchTerm(voter.name);
-                          setMatchingVoters([]);
-                          setError("");
-                        }}
-                      >
-                        <span className="block font-medium text-slate-900">
-                          {voter.name}
-                        </span>
-  
-                        {voter.location && (
-                          <span className="text-xs text-slate-500">
-                            {voter.location}
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-  
-              {!isSearching &&
-                hasCompletedSearch &&
-                searchTerm.trim().length >= 2 &&
-                matchingVoters.length === 0 &&
-                !selectedVoter &&
-                !error && (
-                  <p className="mt-2 text-sm text-slate-500">
-                    No matching voter found.
-                  </p>
-                )}
-            </div>
-  
-            <div>
-              <label
-                htmlFor="voter-contact"
-                className="mb-2 block text-sm font-medium"
-              >
-                Registered email or phone number
-              </label>
-  
-              <Input
-                id="voter-contact"
-                type="text"
-                inputMode="text"
-                placeholder="Email address or phone number"
-                value={contact}
-                autoComplete="off"
-                disabled={!selectedVoter}
-                onChange={(event) => {
-                  setContact(event.target.value);
-                  setError("");
-                }}
-              />
-  
-              <p className="mt-2 text-xs text-slate-500">
-                Enter either one. It must match the
-                information in the voter register.
-              </p>
-            </div>
-  
-            {error && (
-              <p
-                role="alert"
-                className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700"
-              >
-                {error}
-              </p>
-            )}
-  
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={
-                isVerifying ||
-                !selectedVoter ||
-                !contact.trim()
-              }
-            >
-              {isVerifying
-                ? "Verifying..."
-                : "Verify and Continue"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-    );
+
+    try {
+      setIsVerifying(true);
+
+      const response = await fetch("/api/election", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        cache: "no-store",
+        body: JSON.stringify({
+          action: "createVotingSession",
+          electionId: config.electionId,
+          accessCode: normalizedCode,
+        }),
+      });
+
+      const data =
+        (await response.json()) as VotingSessionResponse;
+
+      if (!response.ok || !data.success) {
+        switch (data.code) {
+          case "ELECTION_NOT_OPEN":
+            setNotice(
+              "Voting has not opened yet. Please return when the election officially begins."
+            );
+            return;
+
+          case "RATE_LIMITED":
+            setError(
+              "Too many verification requests. Please try again later."
+            );
+            return;
+
+          case "INVALID_ACCESS_CODE":
+            setError(
+              "Invalid or unavailable access code. Please check it and try again."
+            );
+            return;
+
+          case "INVALID_SESSION_TOKEN":
+          case "SESSION_TOKEN_REUSED":
+            setError(
+              "Unable to establish a secure voting session. Please try again."
+            );
+            return;
+
+          default:
+            setError(
+              data.message ||
+                "Unable to verify your access code."
+            );
+            return;
+        }
+      }
+
+      /**
+       * Validate the authenticated response.
+       *
+       * The session token must be generated by
+       * our Next.js server and accepted by
+       * the Apps Script backend.
+       */
+      if (
+        data.electionId !== config.electionId ||
+        !data.sessionToken ||
+        !/^[A-Za-z0-9_-]{43}$/.test(
+          data.sessionToken
+        ) ||
+        !data.session?.expiresAt ||
+        typeof data.voter?.name !== "string" ||
+        !data.voter.name.trim()
+      ) {
+        setError(
+          "The election server returned an incomplete voting session. Please try again."
+        );
+        return;
+      }
+
+      const expiresAt = new Date(
+        data.session.expiresAt
+      ).getTime();
+
+      if (
+        !Number.isFinite(expiresAt) ||
+        expiresAt <= Date.now()
+      ) {
+        setError(
+          "The voting session has expired. Please verify your access code again."
+        );
+        return;
+      }
+
+      /**
+       * IMPORTANT:
+       *
+       * The backend intentionally does not
+       * expose the voter's database ID.
+       *
+       * Ballot submission must identify the
+       * voter using the authenticated session.
+       *
+       * We retain an empty ID only for
+       * compatibility with the current
+       * VerifiedVotingVoter interface.
+       */
+      const voter: VerifiedVoter = {
+        id: "",
+        name: data.voter.name.trim(),
+      };
+
+      const session: VotingSession = {
+        token: data.sessionToken,
+        expiresAt: data.session.expiresAt,
+      };
+
+      /**
+       * Clear the access code before
+       * transitioning to the ballot.
+       *
+       * The session token is passed directly
+       * into React state through the callback.
+       *
+       * Never store the token in localStorage
+       * or sessionStorage.
+       */
+      setAccessCode("");
+
+      onVerified(voter, session);
+
+    } catch {
+      setError(
+        "Unable to connect to the election server. Please try again."
+      );
+    } finally {
+      setIsVerifying(false);
+    }
   }
+
+  return (
+    <Card className="overflow-hidden border-slate-200 shadow-sm">
+      <div className="bg-gradient-to-r from-green-800 to-green-600 px-6 py-7 text-white">
+        <div className="flex items-center gap-3">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/15">
+            <Vote className="h-6 w-6" />
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-green-100">
+              ACGC Elections 2026
+            </p>
+
+            <h2 className="text-xl font-bold">
+              Secure Voter Access
+            </h2>
+          </div>
+        </div>
+
+        <p className="mt-4 text-sm leading-6 text-green-50">
+          Enter your personal voter access code to
+          verify your eligibility for this election.
+        </p>
+      </div>
+
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <LockKeyhole className="h-5 w-5 text-green-700" />
+          Voter Verification
+        </CardTitle>
+
+        <p className="text-sm text-slate-600">
+          Your access code is unique to you. Keep it
+          private and do not share it with anyone.
+        </p>
+      </CardHeader>
+
+      <CardContent className="pt-4">
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-6"
+        >
+          <div>
+            <label
+              htmlFor="voter-access-code"
+              className="mb-2 block text-sm font-semibold text-slate-800"
+            >
+              Your Access Code
+            </label>
+
+            <Input
+              id="voter-access-code"
+              type="text"
+              value={accessCode}
+              onChange={(event) => {
+                setAccessCode(
+                  formatAccessCode(event.target.value)
+                );
+                setError("");
+                setNotice("");
+              }}
+              placeholder="ABCDEF-XXXX-XXXX-XXXX"
+              autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
+              maxLength={21}
+              disabled={isVerifying}
+              className="h-14 font-mono text-base tracking-wider sm:text-lg"
+              aria-describedby="access-code-help"
+            />
+
+            <p
+              id="access-code-help"
+              className="mt-2 text-xs leading-5 text-slate-500"
+            >
+              Enter the private access code issued to
+              you by the ACGC Electoral Commission.
+            </p>
+          </div>
+
+          {error && (
+            <div
+              role="alert"
+              className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+            >
+              {error}
+            </div>
+          )}
+
+          {notice && (
+            <div
+              role="status"
+              className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+            >
+              {notice}
+            </div>
+          )}
+
+          <Button
+            type="submit"
+            className="h-12 w-full bg-green-700 text-base font-semibold hover:bg-green-800"
+            disabled={
+              isVerifying ||
+              accessCode.replace(/-/g, "").length !== 18
+            }
+          >
+            {isVerifying
+              ? "Verifying Access Code..."
+              : "Verify Access Code"}
+          </Button>
+
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <div className="flex items-start gap-3">
+              <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-green-700" />
+
+              <div>
+                <p className="text-sm font-semibold text-slate-800">
+                  Your vote matters
+                </p>
+
+                <p className="mt-1 text-xs leading-5 text-slate-600">
+                  Access codes are checked securely.
+                  Verification does not cast a vote,
+                  and each eligible voter may submit
+                  only one ballot when voting opens.
+                </p>
+              </div>
+            </div>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}

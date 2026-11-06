@@ -1,29 +1,44 @@
-const ELECTION_ID = "gcr-2026";
+import { config } from "@/lib/config";
 
-export interface AdminUser {
-    id: string;
-    username: string;
-    role: string;
-    active: boolean;
-  }
-  
-  interface LoginAdminResponse extends ApiResponse {
-    token?: string;
-    expiresAt?: string;
-    admin?: AdminUser;
-  }
-  
-  interface VerifyAdminSessionResponse extends ApiResponse {
-    expiresAt?: string;
-    admin?: AdminUser;
-  }
+const ELECTION_ID = config.electionId;
+
+// =====================================================
+// BASE TYPES
+// =====================================================
 
 interface ApiResponse {
   success: boolean;
   message?: string;
+  code?: string;
 }
 
 export type Id = string | number;
+
+// =====================================================
+// ADMIN AUTHENTICATION
+// =====================================================
+
+export interface AdminUser {
+  id: string;
+  username: string;
+  role: string;
+  active: boolean;
+}
+
+interface LoginAdminResponse extends ApiResponse {
+  token?: string;
+  expiresAt?: string;
+  admin?: AdminUser;
+}
+
+interface VerifyAdminSessionResponse extends ApiResponse {
+  expiresAt?: string;
+  admin?: AdminUser;
+}
+
+// =====================================================
+// VOTERS
+// =====================================================
 
 export interface VoterSearchResult {
   id: Id;
@@ -35,13 +50,73 @@ export interface VerifiedVoter {
   id: Id;
   electionId: string;
   name: string;
-  email?: string;
-  phone?: string;
   gender?: string;
   location?: string;
   hasVoted: boolean;
   votedAt?: string;
 }
+
+export interface AdminVoter {
+  id: Id;
+  electionId: string;
+  name: string;
+
+  // Retained for compatibility with existing
+  // spreadsheet records.
+  email?: string;
+  phone?: string;
+
+  gender: string;
+  location: string;
+  hasVoted: boolean;
+  votedAt: string;
+}
+
+export interface VoterInput {
+  name: string;
+  gender: "Male" | "Female";
+  location: string;
+}
+
+export type VoterImportRecord = VoterInput;
+
+export interface VoterImportError {
+  row: number;
+  message: string;
+}
+
+// =====================================================
+// VOTER ACCESS CODES
+// =====================================================
+
+export interface VoterAccessCodeStatus {
+  voterId: string;
+  status: string;
+  issuedAt: string;
+}
+
+export interface GetVoterAccessCodeStatusesResponse
+  extends ApiResponse {
+  electionId: string;
+  codes: VoterAccessCodeStatus[];
+}
+
+/**
+ * Response returned after generating a new
+ * voter access code.
+ *
+ * The plaintext access code is returned once
+ * and must not be persisted in browser storage.
+ */
+export interface GenerateVoterAccessCodeResponse
+  extends ApiResponse {
+  accessCode: string;
+  voterId: string;
+}
+
+// =====================================================
+// CANDIDATES
+// =====================================================
 
 export interface ElectionCandidate {
   id: Id;
@@ -50,12 +125,27 @@ export interface ElectionCandidate {
   position: string;
   location: string;
   image?: string;
+  runningMate?: string;
 }
+
+export interface AdminCandidate
+  extends ElectionCandidate {
+  electionId: string;
+  image: string;
+}
+
+// =====================================================
+// VOTING
+// =====================================================
 
 export interface BallotSelection {
   position: string;
   candidateId: Id;
 }
+
+// =====================================================
+// RESULTS
+// =====================================================
 
 export interface ResultCandidate {
   id: Id;
@@ -92,37 +182,9 @@ export interface ResultsSummary {
   totalVoteRecords: number;
 }
 
-export interface AdminVoter {
-  id: Id;
-  electionId: string;
-  name: string;
-  email: string;
-  phone: string;
-  gender: string;
-  location: string;
-  hasVoted: boolean;
-  votedAt: string;
-}
-
-export interface VoterInput {
-  name: string;
-  email?: string;
-  phone?: string;
-  gender?: string;
-  location?: string;
-}
-
-export interface VoterImportRecord extends VoterInput {}
-
-export interface VoterImportError {
-  row: number;
-  message: string;
-}
-
-export interface AdminCandidate extends ElectionCandidate {
-  electionId: string;
-  image: string;
-}
+// =====================================================
+// ELECTION
+// =====================================================
 
 export type ElectionStatus =
   | "Draft"
@@ -138,6 +200,25 @@ export interface Election {
   majorityRule: string;
   verificationMethod: string;
 }
+
+// =====================================================
+// ELECTION READINESS
+// =====================================================
+
+export interface ElectionReadiness {
+  ready: boolean;
+  checksPassed: boolean;
+  openingEnabled: boolean;
+  registeredVoters: number;
+  registeredCandidates: number;
+  accessCodesIssued: number;
+  accessCodesRequired: number;
+  issues: string[];
+}
+
+// =====================================================
+// ANALYTICS
+// =====================================================
 
 export interface TurnoutSummary {
   registeredVoters: number;
@@ -194,45 +275,37 @@ export interface ElectionAnalytics {
   candidateBreakdown?: PositionCandidateBreakdown[];
 }
 
-interface SearchVotersResponse extends ApiResponse {
+// =====================================================
+// API RESPONSE TYPES
+// =====================================================
+
+interface SearchVotersResponse
+  extends ApiResponse {
   voters: VoterSearchResult[];
 }
 
-interface VerifyVoterResponse extends ApiResponse {
+interface VerifyVoterResponse
+  extends ApiResponse {
   voter?: VerifiedVoter;
 }
 
-interface GetCandidatesResponse extends ApiResponse {
-  candidates: ElectionCandidate[];
-}
-
-interface SubmitBallotResponse extends ApiResponse {
-  reference?: string;
-}
-
-interface GetResultsResponse extends ApiResponse {
-  summary: ResultsSummary;
-  results: PositionResult[];
-}
-
-interface ResetElectionResponse extends ApiResponse {
-  deletedVoteCount: number;
-  resetVoterCount: number;
-}
-
-interface GetVotersResponse extends ApiResponse {
+interface GetVotersResponse
+  extends ApiResponse {
   voters: AdminVoter[];
 }
 
-interface AddVoterResponse extends ApiResponse {
+interface AddVoterResponse
+  extends ApiResponse {
   voter?: AdminVoter;
 }
 
-interface UpdateVoterResponse extends ApiResponse {
+interface UpdateVoterResponse
+  extends ApiResponse {
   voter?: AdminVoter;
 }
 
-interface ImportVotersResponse extends ApiResponse {
+interface ImportVotersResponse
+  extends ApiResponse {
   importedCount: number;
   duplicateCount: number;
   errorCount: number;
@@ -240,40 +313,77 @@ interface ImportVotersResponse extends ApiResponse {
   voters: AdminVoter[];
 }
 
-interface GetAdminCandidatesResponse extends ApiResponse {
+interface GetCandidatesResponse
+  extends ApiResponse {
+  candidates: ElectionCandidate[];
+}
+
+interface GetAdminCandidatesResponse
+  extends ApiResponse {
   candidates: AdminCandidate[];
 }
 
-interface AddCandidateResponse extends ApiResponse {
+interface AddCandidateResponse
+  extends ApiResponse {
   candidate?: AdminCandidate;
 }
 
-interface UpdateCandidateResponse extends ApiResponse {
+interface UpdateCandidateResponse
+  extends ApiResponse {
   candidate?: AdminCandidate;
 }
 
-interface DeleteCandidateResponse extends ApiResponse {
+interface DeleteCandidateResponse
+  extends ApiResponse {
   candidateId?: Id;
 }
 
-interface GetElectionResponse extends ApiResponse {
+interface SubmitBallotResponse
+  extends ApiResponse {
+  reference?: string;
+}
+
+interface GetResultsResponse
+  extends ApiResponse {
+  summary: ResultsSummary;
+  results: PositionResult[];
+}
+
+interface ResetElectionResponse
+  extends ApiResponse {
+  deletedVoteCount: number;
+  resetVoterCount: number;
+}
+
+interface GetElectionResponse
+  extends ApiResponse {
   election?: Election;
 }
 
-interface GetElectionsResponse extends ApiResponse {
+interface GetElectionsResponse
+  extends ApiResponse {
   elections: Election[];
 }
 
-interface UpdateElectionStatusResponse extends ApiResponse {
+interface UpdateElectionStatusResponse
+  extends ApiResponse {
   election?: Election;
 }
 
-interface GetAnalyticsResponse extends ApiResponse {
+interface GetElectionReadinessResponse
+  extends ApiResponse {
+  electionId: string;
+  readiness: ElectionReadiness;
+}
+
+interface GetAnalyticsResponse
+  extends ApiResponse {
   electionId: string;
   analytics: ElectionAnalytics;
 }
 
-interface GetPollingDashboardResponse extends ApiResponse {
+interface GetPollingDashboardResponse
+  extends ApiResponse {
   electionId: string;
   dashboard: {
     summary: TurnoutSummary;
@@ -283,53 +393,109 @@ interface GetPollingDashboardResponse extends ApiResponse {
   };
 }
 
-function getAdminToken() {
-    if (typeof window === "undefined") {
-      return "";
-    }
-  
-    return (
-      window.sessionStorage.getItem(
-        "gcr-admin-token"
-      ) || ""
-    );
+// =====================================================
+// ADMIN TOKEN
+// =====================================================
+
+function getAdminToken(): string {
+  if (typeof window === "undefined") {
+    return "";
   }
 
-  async function callElectionApi<T extends ApiResponse>(
-    body: Record<string, unknown>
-  ): Promise<T> {
-    const response = await fetch("/api/election", {
+  return (
+    window.sessionStorage.getItem(
+      "gcr-admin-token"
+    ) || ""
+  );
+}
+
+// =====================================================
+// API CLIENT
+// =====================================================
+
+async function callElectionApi<
+  T extends ApiResponse
+>(
+  body: Record<string, unknown>
+): Promise<T> {
+  const response = await fetch(
+    "/api/election",
+    {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
         ...body,
-        adminToken: getAdminToken(),
+        adminToken:
+          body.adminToken ??
+          getAdminToken(),
       }),
       cache: "no-store",
-    });
-  
-    let data: T;
-  
-    try {
-      data = (await response.json()) as T;
-    } catch {
-      throw new Error(
-        "The election server returned an invalid response."
-      );
     }
-  
-    if (!response.ok || !data.success) {
-      throw new Error(
-        data.message || "Election server request failed."
-      );
-    }
-  
-    return data;
+  );
+
+  let data: T;
+
+  try {
+    data = (await response.json()) as T;
+  } catch {
+    throw new Error(
+      "The election server returned an invalid response."
+    );
   }
 
-// Voters
+  if (!response.ok || !data.success) {
+    throw new Error(
+      data.message ||
+        "Election server request failed."
+    );
+  }
+
+  return data;
+}
+
+// =====================================================
+// ADMIN AUTHENTICATION FUNCTIONS
+// =====================================================
+
+export async function loginAdmin(
+  username: string,
+  password: string
+): Promise<LoginAdminResponse> {
+  return callElectionApi<LoginAdminResponse>({
+    action: "loginAdmin",
+    username,
+    password,
+  });
+}
+
+export async function verifyAdminSession(
+  adminToken: string
+): Promise<VerifyAdminSessionResponse> {
+  return callElectionApi<VerifyAdminSessionResponse>({
+    action: "verifyAdminSession",
+    adminToken,
+  });
+}
+
+export async function logoutAdmin(
+  adminToken: string
+): Promise<ApiResponse> {
+  return callElectionApi<ApiResponse>({
+    action: "logoutAdmin",
+    adminToken,
+  });
+}
+
+// =====================================================
+// VOTER FUNCTIONS
+// =====================================================
+
+/**
+ * Legacy endpoints retained for compatibility.
+ * They remain disabled in Apps Script.
+ */
 
 export async function searchVoters(
   query: string
@@ -392,7 +558,49 @@ export async function importVoters(
   });
 }
 
-// Candidates
+// =====================================================
+// ACCESS CODE FUNCTIONS
+// =====================================================
+
+/**
+ * Fetch access-code issuance statuses.
+ *
+ * This endpoint never returns plaintext
+ * access codes or stored hashes.
+ */
+export async function getVoterAccessCodeStatuses(): Promise<GetVoterAccessCodeStatusesResponse> {
+  return callElectionApi<GetVoterAccessCodeStatusesResponse>({
+    action: "getVoterAccessCodeStatuses",
+    electionId: ELECTION_ID,
+  });
+}
+
+/**
+ * Generate a secure access code for a voter.
+ *
+ * The Next.js API route:
+ * 1. Checks administrator authorization.
+ * 2. Generates a cryptographically secure code.
+ * 3. Registers its hash through Apps Script.
+ * 4. Returns the plaintext code once.
+ *
+ * IMPORTANT:
+ * Never save the returned code to localStorage,
+ * sessionStorage, or application logs.
+ */
+export async function generateVoterAccessCode(
+  voterId: Id
+): Promise<GenerateVoterAccessCodeResponse> {
+  return callElectionApi<GenerateVoterAccessCodeResponse>({
+    action: "generateVoterAccessCode",
+    electionId: ELECTION_ID,
+    voterId,
+  });
+}
+
+// =====================================================
+// CANDIDATE FUNCTIONS
+// =====================================================
 
 export async function getCandidates(): Promise<GetCandidatesResponse> {
   return callElectionApi<GetCandidatesResponse>({
@@ -412,7 +620,8 @@ export async function addCandidate(
   name: string,
   position: string,
   location: string,
-  image = ""
+  image = "",
+  runningMate = ""
 ): Promise<AddCandidateResponse> {
   return callElectionApi<AddCandidateResponse>({
     action: "addCandidate",
@@ -421,6 +630,7 @@ export async function addCandidate(
     position,
     location,
     image,
+    runningMate,
   });
 }
 
@@ -429,7 +639,8 @@ export async function updateCandidate(
   name: string,
   position: string,
   location: string,
-  image = ""
+  image = "",
+  runningMate = ""
 ): Promise<UpdateCandidateResponse> {
   return callElectionApi<UpdateCandidateResponse>({
     action: "updateCandidate",
@@ -439,6 +650,7 @@ export async function updateCandidate(
     position,
     location,
     image,
+    runningMate,
   });
 }
 
@@ -452,7 +664,14 @@ export async function deleteCandidate(
   });
 }
 
-// Voting
+// =====================================================
+// VOTING FUNCTIONS
+// =====================================================
+
+/**
+ * Legacy ballot submission.
+ * Disabled in the current backend.
+ */
 
 export async function submitBallot(
   voterId: Id,
@@ -466,7 +685,9 @@ export async function submitBallot(
   });
 }
 
-// Results
+// =====================================================
+// RESULTS FUNCTIONS
+// =====================================================
 
 export async function getResults(): Promise<GetResultsResponse> {
   return callElectionApi<GetResultsResponse>({
@@ -475,7 +696,9 @@ export async function getResults(): Promise<GetResultsResponse> {
   });
 }
 
-// Analytics
+// =====================================================
+// ANALYTICS FUNCTIONS
+// =====================================================
 
 export async function getAnalytics(): Promise<GetAnalyticsResponse> {
   return callElectionApi<GetAnalyticsResponse>({
@@ -491,7 +714,9 @@ export async function getPollingDashboard(): Promise<GetPollingDashboardResponse
   });
 }
 
-// Election management
+// =====================================================
+// ELECTION MANAGEMENT
+// =====================================================
 
 export async function getElection(): Promise<GetElectionResponse> {
   return callElectionApi<GetElectionResponse>({
@@ -503,6 +728,13 @@ export async function getElection(): Promise<GetElectionResponse> {
 export async function getElections(): Promise<GetElectionsResponse> {
   return callElectionApi<GetElectionsResponse>({
     action: "getElections",
+  });
+}
+
+export async function getElectionReadiness(): Promise<GetElectionReadinessResponse> {
+  return callElectionApi<GetElectionReadinessResponse>({
+    action: "getElectionReadiness",
+    electionId: ELECTION_ID,
   });
 }
 
@@ -553,32 +785,3 @@ export async function resetElection(
     confirmation,
   });
 }
-
-export async function loginAdmin(
-    username: string,
-    password: string
-  ): Promise<LoginAdminResponse> {
-    return callElectionApi<LoginAdminResponse>({
-      action: "loginAdmin",
-      username,
-      password,
-    });
-  }
-  
-  export async function verifyAdminSession(
-    adminToken: string
-  ): Promise<VerifyAdminSessionResponse> {
-    return callElectionApi<VerifyAdminSessionResponse>({
-      action: "verifyAdminSession",
-      adminToken,
-    });
-  }
-  
-  export async function logoutAdmin(
-    adminToken: string
-  ): Promise<ApiResponse> {
-    return callElectionApi<ApiResponse>({
-      action: "logoutAdmin",
-      adminToken,
-    });
-  }

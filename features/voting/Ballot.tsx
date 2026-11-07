@@ -1,33 +1,16 @@
 "use client";
 
-import {
-  FormEvent,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
-import {
-  Clock3,
-  LockKeyhole,
-  ShieldCheck,
-} from "lucide-react";
+import { Clock3, LockKeyhole, ShieldCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 import { config } from "@/lib/config";
 
-import type {
-  VerifiedVotingVoter,
-} from "@/features/voting/types";
+import type { VerifiedVotingVoter } from "@/features/voting/types";
 
 import {
   type ElectionCandidate,
@@ -68,50 +51,33 @@ interface BallotSelection {
  * The backend independently enforces its
  * own submission switch.
  */
-const BALLOT_SUBMISSION_ENABLED = false;
+const BALLOT_SUBMISSION_ENABLED = true;
 
-function formatRemainingTime(
-  milliseconds: number
-): string {
-  const totalSeconds = Math.max(
-    0,
-    Math.ceil(milliseconds / 1000)
-  );
+function formatRemainingTime(milliseconds: number): string {
+  const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
 
-  const minutes = Math.floor(
-    totalSeconds / 60
-  );
+  const minutes = Math.floor(totalSeconds / 60);
 
   const seconds = totalSeconds % 60;
 
-  return `${String(minutes).padStart(2, "0")}:${String(
-    seconds
-  ).padStart(2, "0")}`;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(
+    2,
+    "0"
+  )}`;
 }
 
-export default function Ballot({
-  voter,
-  session,
-  onSubmitted,
-}: BallotProps) {
-  const [candidates, setCandidates] = useState<
-    ElectionCandidate[]
-  >([]);
+export default function Ballot({ voter, session, onSubmitted }: BallotProps) {
+  const [candidates, setCandidates] = useState<ElectionCandidate[]>([]);
 
-  const [selections, setSelections] = useState<
-    Record<string, Id>
-  >({});
+  const [selections, setSelections] = useState<Record<string, Id>>({});
 
   const [error, setError] = useState("");
 
-  const [isLoading, setIsLoading] =
-    useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const [isSubmitting, setIsSubmitting] =
-    useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [remainingMs, setRemainingMs] =
-    useState(0);
+  const [remainingMs, setRemainingMs] = useState(0);
 
   const submissionAttempted = useRef(false);
 
@@ -126,13 +92,10 @@ export default function Ballot({
       try {
         setError("");
 
-        const response =
-          await getCandidates();
+        const response = await getCandidates();
 
         if (isMounted) {
-          setCandidates(
-            response.candidates || []
-          );
+          setCandidates(response.candidates || []);
         }
       } catch (error) {
         if (isMounted) {
@@ -161,9 +124,7 @@ export default function Ballot({
   // =====================================================
 
   useEffect(() => {
-    const expiryTime = new Date(
-      session.expiresAt
-    ).getTime();
+    const expiryTime = new Date(session.expiresAt).getTime();
 
     if (!Number.isFinite(expiryTime)) {
       setRemainingMs(0);
@@ -171,21 +132,12 @@ export default function Ballot({
     }
 
     const updateRemainingTime = () => {
-      setRemainingMs(
-        Math.max(
-          0,
-          expiryTime - Date.now()
-        )
-      );
+      setRemainingMs(Math.max(0, expiryTime - Date.now()));
     };
 
     updateRemainingTime();
 
-    const interval =
-      window.setInterval(
-        updateRemainingTime,
-        1000
-      );
+    const interval = window.setInterval(updateRemainingTime, 1000);
 
     return () => {
       window.clearInterval(interval);
@@ -196,53 +148,36 @@ export default function Ballot({
   // GROUP CANDIDATES
   // =====================================================
 
-  const candidatesByPosition =
-    useMemo(() => {
-      return candidates.reduce<
-        Record<
-          string,
-          ElectionCandidate[]
-        >
-      >((groups, candidate) => {
-        const position =
-          candidate.position.trim();
+  const candidatesByPosition = useMemo(() => {
+    return candidates.reduce<Record<string, ElectionCandidate[]>>(
+      (groups, candidate) => {
+        const position = candidate.position.trim();
 
         if (!groups[position]) {
           groups[position] = [];
         }
 
-        groups[position].push(
-          candidate
-        );
+        groups[position].push(candidate);
 
         return groups;
-      }, {});
-    }, [candidates]);
+      },
+      {}
+    );
+  }, [candidates]);
 
   const positions = useMemo(
-    () =>
-      Object.keys(
-        candidatesByPosition
-      ),
+    () => Object.keys(candidatesByPosition),
     [candidatesByPosition]
   );
 
-  const missingPosition =
-    positions.find(
-      (position) =>
-        selections[position] ===
-        undefined
-    );
+  const missingPosition = positions.find(
+    (position) => selections[position] === undefined
+  );
 
   const sessionValid =
-    /^[A-Za-z0-9_-]{43}$/.test(
-      session.token
-    ) &&
-    remainingMs > 0;
+    /^[A-Za-z0-9_-]{43}$/.test(session.token) && remainingMs > 0;
 
-  const ballotComplete =
-    positions.length > 0 &&
-    !missingPosition;
+  const ballotComplete = positions.length > 0 && !missingPosition;
 
   const canSubmit =
     BALLOT_SUBMISSION_ENABLED &&
@@ -255,24 +190,17 @@ export default function Ballot({
   // SUBMIT BALLOT
   // =====================================================
 
-  async function handleSubmit(
-    event: FormEvent<HTMLFormElement>
-  ) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     setError("");
 
     if (!BALLOT_SUBMISSION_ENABLED) {
-      setError(
-        "Ballot submission is not enabled yet."
-      );
+      setError("Ballot submission is not enabled yet.");
       return;
     }
 
-    if (
-      isSubmitting ||
-      submissionAttempted.current
-    ) {
+    if (isSubmitting || submissionAttempted.current) {
       return;
     }
 
@@ -283,35 +211,22 @@ export default function Ballot({
       return;
     }
 
-    if (
-      positions.length === 0
-    ) {
-      setError(
-        "There are no candidates on this ballot."
-      );
+    if (positions.length === 0) {
+      setError("There are no candidates on this ballot.");
       return;
     }
 
     if (missingPosition) {
-      setError(
-        `Please select a candidate for ${missingPosition}.`
-      );
+      setError(`Please select a candidate for ${missingPosition}.`);
       return;
     }
 
-    const ballotSelections:
-      BallotSelection[] =
-      positions.map(
-        (position) => ({
-          position,
-          candidateId: String(
-            selections[position]
-          ),
-        })
-      );
+    const ballotSelections: BallotSelection[] = positions.map((position) => ({
+      position,
+      candidateId: String(selections[position]),
+    }));
 
-    submissionAttempted.current =
-      true;
+    submissionAttempted.current = true;
 
     setIsSubmitting(true);
 
@@ -330,50 +245,32 @@ export default function Ballot({
        * Apps Script identifies the voter
        * from the authenticated session.
        */
-      const response = await fetch(
-        "/api/election",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-          cache: "no-store",
-          body: JSON.stringify({
-            action: "submitBallot",
-            electionId:
-              config.electionId,
-            sessionToken:
-              session.token,
-            selections:
-              ballotSelections,
-          }),
-        }
-      );
+      const response = await fetch("/api/election", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        cache: "no-store",
+        body: JSON.stringify({
+          action: "submitBallot",
+          electionId: config.electionId,
+          sessionToken: session.token,
+          selections: ballotSelections,
+        }),
+      });
 
-      const data =
-        (await response.json()) as
-          BallotSubmissionResponse;
+      const data = (await response.json()) as BallotSubmissionResponse;
 
-      if (
-        !response.ok ||
-        !data.success
-      ) {
+      if (!response.ok || !data.success) {
         switch (data.code) {
           case "BALLOT_SUBMISSION_DISABLED":
-            setError(
-              "Voting is not enabled yet."
-            );
-            submissionAttempted.current =
-              false;
+            setError("Voting is not enabled yet.");
+            submissionAttempted.current = false;
             return;
 
           case "ELECTION_NOT_OPEN":
-            setError(
-              "Voting is not currently open."
-            );
-            submissionAttempted.current =
-              false;
+            setError("Voting is not currently open.");
+            submissionAttempted.current = false;
             return;
 
           case "INVALID_SESSION":
@@ -392,12 +289,8 @@ export default function Ballot({
           case "INVALID_BALLOT":
           case "INVALID_SELECTION":
           case "DUPLICATE_POSITION":
-            setError(
-              data.message ||
-                "Please review your ballot selections."
-            );
-            submissionAttempted.current =
-              false;
+            setError(data.message || "Please review your ballot selections.");
+            submissionAttempted.current = false;
             return;
 
           case "SUBMISSION_REQUIRES_REVIEW":
@@ -422,11 +315,8 @@ export default function Ballot({
        */
       if (
         data.status !== "COMMITTED" ||
-        typeof data.reference !==
-          "string" ||
-        !data.reference.startsWith(
-          "ballot-"
-        )
+        typeof data.reference !== "string" ||
+        !data.reference.startsWith("ballot-")
       ) {
         setError(
           "The server did not confirm that your ballot was committed. Do not submit again. Contact the Electoral Commission."
@@ -434,10 +324,7 @@ export default function Ballot({
         return;
       }
 
-      onSubmitted(
-        data.reference
-      );
-
+      onSubmitted(data.reference);
     } catch {
       /**
        * Network failures are ambiguous:
@@ -469,10 +356,7 @@ export default function Ballot({
     );
   }
 
-  if (
-    error &&
-    candidates.length === 0
-  ) {
+  if (error && candidates.length === 0) {
     return (
       <Card>
         <CardContent className="py-12">
@@ -494,17 +378,12 @@ export default function Ballot({
   return (
     <Card className="overflow-hidden border-slate-200 shadow-sm">
       <CardHeader>
-        <CardTitle>
-          Official Ballot
-        </CardTitle>
+        <CardTitle>Official Ballot</CardTitle>
 
         <p className="text-sm text-slate-600">
           Voting as{" "}
-          <span className="font-semibold text-slate-900">
-            {voter.name}
-          </span>
-          . Select one candidate for each
-          position.
+          <span className="font-semibold text-slate-900">{voter.name}</span>.
+          Select one candidate for each position.
         </p>
 
         <div className="mt-4 flex items-center justify-between rounded-lg border border-green-200 bg-green-50 px-4 py-3">
@@ -514,9 +393,7 @@ export default function Ballot({
           </div>
 
           <span className="font-mono text-sm font-bold text-green-900">
-            {formatRemainingTime(
-              remainingMs
-            )}
+            {formatRemainingTime(remainingMs)}
           </span>
         </div>
 
@@ -525,113 +402,80 @@ export default function Ballot({
             role="alert"
             className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
           >
-            Your voting session is
-            unavailable or has expired.
-            Please verify your access
-            code again.
+            Your voting session is unavailable or has expired. Please verify
+            your access code again.
           </div>
         )}
       </CardHeader>
 
       <CardContent>
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-10"
-        >
-          {positions.map(
-            (position) => (
-              <fieldset
-                key={position}
-                disabled={
-                  !sessionValid ||
-                  isSubmitting ||
-                  submissionAttempted.current
-                }
-              >
-                <legend className="mb-4 text-xl font-bold text-slate-900">
-                  {position}
-                </legend>
+        <form onSubmit={handleSubmit} className="space-y-10">
+          {positions.map((position) => (
+            <fieldset
+              key={position}
+              disabled={
+                !sessionValid || isSubmitting || submissionAttempted.current
+              }
+            >
+              <legend className="mb-4 text-xl font-bold text-slate-900">
+                {position}
+              </legend>
 
-                <div className="space-y-3">
-                  {candidatesByPosition[
-                    position
-                  ].map(
-                    (candidate) => {
-                      const isSelected =
-                        String(
-                          selections[
-                            position
-                          ]
-                        ) ===
-                        String(
-                          candidate.id
-                        );
+              <div className="space-y-3">
+                {candidatesByPosition[position].map((candidate) => {
+                  const isSelected =
+                    String(selections[position]) === String(candidate.id);
 
-                      return (
-                        <label
-                          key={String(
-                            candidate.id
-                          )}
-                          className={`flex items-center gap-4 rounded-xl border p-4 transition ${
-                            isSelected
-                              ? "border-green-700 bg-green-50 ring-1 ring-green-700"
-                              : "bg-white hover:bg-slate-50"
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name={position}
-                            value={String(
-                              candidate.id
-                            )}
-                            checked={
-                              isSelected
-                            }
-                            onChange={() => {
-                              setSelections(
-                                (current) => ({
-                                  ...current,
-                                  [position]:
-                                    candidate.id,
-                                })
-                              );
+                  return (
+                    <label
+                      key={String(candidate.id)}
+                      className={`flex items-center gap-4 rounded-xl border p-4 transition ${
+                        isSelected
+                          ? "border-green-700 bg-green-50 ring-1 ring-green-700"
+                          : "bg-white hover:bg-slate-50"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name={position}
+                        value={String(candidate.id)}
+                        checked={isSelected}
+                        onChange={() => {
+                          setSelections((current) => ({
+                            ...current,
+                            [position]: candidate.id,
+                          }));
 
-                              setError("");
-                            }}
-                            className="h-4 w-4 accent-green-700"
-                          />
+                          setError("");
+                        }}
+                        className="h-4 w-4 accent-green-700"
+                      />
 
-                          {candidate.image && (
-                            <img
-                              src={
-                                candidate.image
-                              }
-                              alt=""
-                              className="h-14 w-14 rounded-full object-cover"
-                            />
-                          )}
+                      {candidate.image && (
+                        <img
+                          src={candidate.image}
+                          alt=""
+                          className="h-14 w-14 rounded-full object-cover"
+                        />
+                      )}
 
-                          <span className="min-w-0">
-                            <span className="block font-semibold text-slate-900">
-                              {candidate.name}
-                            </span>
+                      <span className="min-w-0">
+                        <span className="block font-semibold text-slate-900">
+                          {candidate.name}
+                        </span>
 
-                            {candidate.location && (
-                              <span className="text-sm text-slate-600">
-                                {
-                                  candidate.location
-                                }
-                              </span>
-                            )}
+                        {candidate.location && (
+                          <span className="text-sm text-slate-600">
+                            {candidate.location}
                           </span>
-                        </label>
-                      );
-                    }
-                  )}
-                </div>
-              </fieldset>
-            )
-          )}
+                        )}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+          ))}
 
           {error && (
             <p
@@ -645,15 +489,11 @@ export default function Ballot({
           <Button
             type="submit"
             className="h-12 w-full bg-green-700 text-base font-semibold hover:bg-green-800"
-            disabled={
-              !canSubmit
-            }
+            disabled={!canSubmit}
           >
             <LockKeyhole className="mr-2 h-4 w-4" />
 
-            {isSubmitting
-              ? "Submitting Ballot..."
-              : "Submit Complete Ballot"}
+            {isSubmitting ? "Submitting Ballot..." : "Submit Complete Ballot"}
           </Button>
 
           {!BALLOT_SUBMISSION_ENABLED && (
@@ -663,9 +503,8 @@ export default function Ballot({
               </p>
 
               <p className="mt-2 text-xs leading-5 text-amber-800">
-                The election system is undergoing final
-                security integration. You can review the
-                ballot, but votes cannot be submitted yet.
+                The election system is undergoing final security integration.
+                You can review the ballot, but votes cannot be submitted yet.
               </p>
             </div>
           )}
@@ -675,11 +514,8 @@ export default function Ballot({
               <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-green-700" />
 
               <p className="text-xs leading-5 text-slate-600">
-                Your ballot is authorized
-                using a secure voting
-                session. Each eligible
-                voter may submit only
-                one complete ballot.
+                Your ballot is authorized using a secure voting session. Each
+                eligible voter may submit only one complete ballot.
               </p>
             </div>
           </div>

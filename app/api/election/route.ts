@@ -18,6 +18,7 @@ export const dynamic = "force-dynamic";
 const apiUrl = process.env.GOOGLE_APPS_SCRIPT_URL;
 
 const TEST_ELECTION_ID = "ACGC-MOCK-2026";
+const OFFICIAL_ELECTION_ID = "ACGC-GENERAL-2026";
 
 const MAX_REQUEST_BYTES = 16_384;
 
@@ -41,9 +42,12 @@ type Voter = {
   name: string;
 };
 
+type BallotDecision = "YES" | "NO" | "ABSTAIN" | "SELECT";
+
 type BallotSelection = {
   position: string;
   candidateId: string;
+  decision: BallotDecision;
 };
 
 // =====================================================
@@ -141,8 +145,7 @@ function jsonResponse(
 function isLocalDevelopment(): boolean {
   return (
     process.env.NODE_ENV === "development" &&
-    process.env.ELECTION_DEPLOYMENT_MODE ===
-      "development"
+    process.env.ELECTION_DEPLOYMENT_MODE === "development"
   );
 }
 
@@ -210,7 +213,7 @@ function rateLimitError(
 }
 
 // =====================================================
-// TEST ELECTION VALIDATION
+// ELECTION VALIDATION
 // =====================================================
 
 function isTestElection(
@@ -222,12 +225,42 @@ function isTestElection(
   );
 }
 
+function isOfficialElection(
+  electionId: unknown
+): boolean {
+  return (
+    typeof electionId === "string" &&
+    electionId.trim() === OFFICIAL_ELECTION_ID
+  );
+}
+
+function isAllowedElection(
+  electionId: unknown
+): boolean {
+  return (
+    isTestElection(electionId) ||
+    isOfficialElection(electionId)
+  );
+}
+
+function electionAccessError() {
+  return jsonResponse(
+    {
+      success: false,
+      message:
+        "This election is not available.",
+      code: "ELECTION_NOT_ALLOWED",
+    },
+    403
+  );
+}
+
 function testElectionError() {
   return jsonResponse(
     {
       success: false,
       message:
-        "This action is restricted to the TEST election.",
+        "Voting is currently restricted to the TEST election.",
       code: "TEST_ELECTION_ONLY",
     },
     403
@@ -488,15 +521,20 @@ function validateBallotSelections(
 ): BallotSelection[] | null {
   if (
     !Array.isArray(value) ||
-    value.length === 0 ||
-    value.length > 20
+    value.length !== 6
   ) {
     return null;
   }
 
   const selections: BallotSelection[] = [];
-
   const positions = new Set<string>();
+
+  const validDecisions = new Set<BallotDecision>([
+    "YES",
+    "NO",
+    "ABSTAIN",
+    "SELECT",
+  ]);
 
   for (const item of value) {
     if (
@@ -511,11 +549,9 @@ function validateBallotSelections(
       item as Record<string, unknown>;
 
     if (
-      typeof selection.position !==
-        "string" ||
-      !["string", "number"].includes(
-        typeof selection.candidateId
-      )
+      typeof selection.position !== "string" ||
+      typeof selection.candidateId !== "string" ||
+      typeof selection.decision !== "string"
     ) {
       return null;
     }
@@ -523,15 +559,24 @@ function validateBallotSelections(
     const position =
       selection.position.trim();
 
-    const candidateId = String(
-      selection.candidateId
-    ).trim();
+    const candidateId =
+      selection.candidateId.trim();
+
+    const decision =
+      selection.decision.trim().toUpperCase() as BallotDecision;
 
     if (
       !position ||
-      !candidateId ||
       position.length > 100 ||
-      candidateId.length > 150
+      candidateId.length > 150 ||
+      !validDecisions.has(decision)
+    ) {
+      return null;
+    }
+
+    if (
+      decision !== "ABSTAIN" &&
+      !candidateId
     ) {
       return null;
     }
@@ -545,6 +590,7 @@ function validateBallotSelections(
     selections.push({
       position,
       candidateId,
+      decision,
     });
   }
 
@@ -559,8 +605,7 @@ function hasAdminToken(
   body: ElectionApiRequest
 ): boolean {
   return (
-    typeof body.adminToken ===
-      "string" &&
+    typeof body.adminToken === "string" &&
     body.adminToken.trim().length > 0
   );
 }
@@ -590,40 +635,30 @@ export async function POST(
     // ============================================
 
     const contentLength = Number(
-      request.headers.get(
-        "content-length"
-      ) || 0
+      request.headers.get("content-length") || 0
     );
 
-    if (
-      contentLength >
-      MAX_REQUEST_BYTES
-    ) {
+    if (contentLength > MAX_REQUEST_BYTES) {
       return jsonResponse(
         {
           success: false,
-          message:
-            "Request body is too large.",
+          message: "Request body is too large.",
           code: "REQUEST_TOO_LARGE",
         },
         413
       );
     }
 
-    const rawBody =
-      await request.text();
+    const rawBody = await request.text();
 
     if (
-      Buffer.byteLength(
-        rawBody,
-        "utf8"
-      ) > MAX_REQUEST_BYTES
+      Buffer.byteLength(rawBody, "utf8") >
+      MAX_REQUEST_BYTES
     ) {
       return jsonResponse(
         {
           success: false,
-          message:
-            "Request body is too large.",
+          message: "Request body is too large.",
           code: "REQUEST_TOO_LARGE",
         },
         413
@@ -638,8 +673,7 @@ export async function POST(
       return jsonResponse(
         {
           success: false,
-          message:
-            "Invalid JSON request.",
+          message: "Invalid JSON request.",
           code: "INVALID_JSON",
         },
         400
@@ -654,8 +688,7 @@ export async function POST(
       return jsonResponse(
         {
           success: false,
-          message:
-            "Invalid request body.",
+          message: "Invalid request body.",
           code: "INVALID_REQUEST",
         },
         400
@@ -663,8 +696,7 @@ export async function POST(
     }
 
     const action =
-      typeof body.action ===
-      "string"
+      typeof body.action === "string"
         ? body.action.trim()
         : "";
 
@@ -672,8 +704,7 @@ export async function POST(
       return jsonResponse(
         {
           success: false,
-          message:
-            "An API action is required.",
+          message: "An API action is required.",
           code: "INVALID_ACTION",
         },
         400
@@ -699,8 +730,7 @@ export async function POST(
           success: false,
           message:
             "Direct signed requests are not permitted.",
-          code:
-            "SIGNED_REQUEST_FORBIDDEN",
+          code: "SIGNED_REQUEST_FORBIDDEN",
         },
         403
       );
@@ -710,14 +740,11 @@ export async function POST(
     // DISABLED ACTIONS
     // ============================================
 
-    if (
-      DISABLED_ACTIONS.has(action)
-    ) {
+    if (DISABLED_ACTIONS.has(action)) {
       return jsonResponse(
         {
           success: false,
-          message:
-            "This API action is disabled.",
+          message: "This API action is disabled.",
           code: "ACTION_DISABLED",
         },
         403
@@ -728,14 +755,11 @@ export async function POST(
     // EXPLICIT ALLOWLIST
     // ============================================
 
-    if (
-      !ALLOWED_ACTIONS.has(action)
-    ) {
+    if (!ALLOWED_ACTIONS.has(action)) {
       return jsonResponse(
         {
           success: false,
-          message:
-            "Invalid API action.",
+          message: "Invalid API action.",
           code: "INVALID_ACTION",
         },
         400
@@ -748,14 +772,12 @@ export async function POST(
 
     if (action === "loginAdmin") {
       const username =
-        typeof body.username ===
-        "string"
+        typeof body.username === "string"
           ? body.username.trim()
           : "";
 
       const password =
-        typeof body.password ===
-        "string"
+        typeof body.password === "string"
           ? body.password
           : "";
 
@@ -765,17 +787,14 @@ export async function POST(
             success: false,
             message:
               "Username and password are required.",
-            code:
-              "MISSING_CREDENTIALS",
+            code: "MISSING_CREDENTIALS",
           },
           400
         );
       }
 
       const clientId =
-        getTrustedClientIdentifier(
-          request
-        );
+        getTrustedClientIdentifier(request);
 
       if (!clientId) {
         return rateLimitError(
@@ -790,10 +809,8 @@ export async function POST(
             identifier: clientId,
           },
           {
-            type:
-              "admin-credential",
-            identifier:
-              username.toLowerCase(),
+            type: "admin-credential",
+            identifier: username.toLowerCase(),
           },
         ]);
 
@@ -822,8 +839,7 @@ export async function POST(
     // ============================================
 
     if (
-      action ===
-        "verifyAdminSession" ||
+      action === "verifyAdminSession" ||
       action === "logoutAdmin"
     ) {
       if (!hasAdminToken(body)) {
@@ -832,8 +848,7 @@ export async function POST(
             success: false,
             message:
               "Administrator session is required.",
-            code:
-              "MISSING_ADMIN_SESSION",
+            code: "MISSING_ADMIN_SESSION",
           },
           401
         );
@@ -842,8 +857,7 @@ export async function POST(
       const result =
         await callAppsScript({
           action,
-          adminToken:
-            body.adminToken,
+          adminToken: body.adminToken,
         });
 
       return jsonResponse(result);
@@ -853,43 +867,36 @@ export async function POST(
     // SECURE VOTING SESSION
     // ============================================
 
-    if (
-      action ===
-      "createVotingSession"
-    ) {
-      if (
-        !isTestElection(
-          body.electionId
-        )
-      ) {
+    if (action === "createVotingSession") {
+      /*
+       * Voting remains restricted to the
+       * historical MOCK election.
+       *
+       * Official election voting is disabled.
+       */
+
+      if (!isTestElection(body.electionId)) {
         return testElectionError();
       }
 
       const accessCode =
-        typeof body.accessCode ===
-        "string"
-          ? body.accessCode
-              .trim()
-              .toUpperCase()
+        typeof body.accessCode === "string"
+          ? body.accessCode.trim().toUpperCase()
           : "";
 
       if (!accessCode) {
         return jsonResponse(
           {
             success: false,
-            message:
-              "Access code is required.",
-            code:
-              "MISSING_CREDENTIALS",
+            message: "Access code is required.",
+            code: "MISSING_CREDENTIALS",
           },
           400
         );
       }
 
       const clientId =
-        getTrustedClientIdentifier(
-          request
-        );
+        getTrustedClientIdentifier(request);
 
       if (!clientId) {
         return rateLimitError(
@@ -904,8 +911,7 @@ export async function POST(
             identifier: clientId,
           },
           {
-            type:
-              "voter-credential",
+            type: "voter-credential",
             identifier:
               `${TEST_ELECTION_ID}:${accessCode}`,
           },
@@ -919,15 +925,12 @@ export async function POST(
       }
 
       const sessionToken =
-        randomBytes(32)
-          .toString("base64url");
+        randomBytes(32).toString("base64url");
 
       const result =
         await callSignedAppsScript({
-          action:
-            "createVotingSession",
-          electionId:
-            TEST_ELECTION_ID,
+          action: "createVotingSession",
+          electionId: TEST_ELECTION_ID,
           accessCode,
           sessionToken,
         });
@@ -951,8 +954,7 @@ export async function POST(
         success: true,
         message:
           "Voting session created successfully.",
-        electionId:
-          TEST_ELECTION_ID,
+        electionId: TEST_ELECTION_ID,
         voter: result.voter,
         sessionToken,
         session: result.session,
@@ -963,20 +965,18 @@ export async function POST(
     // SECURE BALLOT SUBMISSION
     // ============================================
 
-    if (
-      action === "submitBallot"
-    ) {
-      if (
-        !isTestElection(
-          body.electionId
-        )
-      ) {
+    if (action === "submitBallot") {
+      /*
+       * Official ballot submission remains
+       * disabled until election opening.
+       */
+
+      if (!isTestElection(body.electionId)) {
         return testElectionError();
       }
 
       const sessionToken =
-        typeof body.sessionToken ===
-        "string"
+        typeof body.sessionToken === "string"
           ? body.sessionToken.trim()
           : "";
 
@@ -990,8 +990,7 @@ export async function POST(
             success: false,
             message:
               "A valid voting session is required.",
-            code:
-              "INVALID_SESSION",
+            code: "INVALID_SESSION",
           },
           400
         );
@@ -1008,8 +1007,7 @@ export async function POST(
             success: false,
             message:
               "Your ballot contains invalid or incomplete selections.",
-            code:
-              "INVALID_BALLOT",
+            code: "INVALID_BALLOT",
           },
           400
         );
@@ -1018,8 +1016,7 @@ export async function POST(
       const result =
         await callSignedAppsScript({
           action: "submitBallot",
-          electionId:
-            TEST_ELECTION_ID,
+          electionId: TEST_ELECTION_ID,
           sessionToken,
           selections,
         });
@@ -1037,8 +1034,7 @@ export async function POST(
               "Unable to submit your ballot.",
             code,
           },
-          code ===
-            "BALLOT_SUBMISSION_DISABLED"
+          code === "BALLOT_SUBMISSION_DISABLED"
             ? 403
             : 400
         );
@@ -1049,10 +1045,8 @@ export async function POST(
         message:
           result.message ||
           "Your ballot has been submitted successfully.",
-        status:
-          result.status,
-        reference:
-          result.reference,
+        status: result.status,
+        reference: result.reference,
       });
     }
 
@@ -1060,22 +1054,17 @@ export async function POST(
     // PUBLIC ELECTION ACTIONS
     // ============================================
 
-    if (
-      PUBLIC_ACTIONS.has(action)
-    ) {
-      if (
-        !isTestElection(
-          body.electionId
-        )
-      ) {
-        return testElectionError();
+    if (PUBLIC_ACTIONS.has(action)) {
+      if (!isAllowedElection(body.electionId)) {
+        return electionAccessError();
       }
 
       return jsonResponse(
         await callAppsScript({
           action,
-          electionId:
-            TEST_ELECTION_ID,
+          electionId: String(
+            body.electionId
+          ).trim(),
         })
       );
     }
@@ -1085,55 +1074,45 @@ export async function POST(
     // ============================================
 
     const isAdminRead =
-      ADMIN_READ_ACTIONS.has(
-        action
-      );
+      ADMIN_READ_ACTIONS.has(action);
 
     const isAdminWrite =
-      ADMIN_WRITE_ACTIONS.has(
-        action
-      );
+      ADMIN_WRITE_ACTIONS.has(action);
 
     const isElectionControl =
-      ELECTION_CONTROL_ACTIONS.has(
-        action
-      );
+      ELECTION_CONTROL_ACTIONS.has(action);
 
     if (
       isAdminRead ||
       isAdminWrite ||
       isElectionControl
     ) {
-      if (
-        !hasAdminToken(body)
-      ) {
+      if (!hasAdminToken(body)) {
         return jsonResponse(
           {
             success: false,
             message:
               "Administrator session is required.",
-            code:
-              "MISSING_ADMIN_SESSION",
+            code: "MISSING_ADMIN_SESSION",
           },
           401
         );
       }
 
-      if (
-        !isTestElection(
-          body.electionId
-        )
-      ) {
-        return testElectionError();
+      if (!isAllowedElection(body.electionId)) {
+        return electionAccessError();
       }
+
+      const electionId = String(
+        body.electionId
+      ).trim();
 
       // ==========================================
       // ACCESS CODE GENERATION
       // ==========================================
 
       if (
-        action ===
-        "generateVoterAccessCode"
+        action === "generateVoterAccessCode"
       ) {
         const voterId = String(
           body.voterId || ""
@@ -1143,10 +1122,8 @@ export async function POST(
           return jsonResponse(
             {
               success: false,
-              message:
-                "Voter ID is required.",
-              code:
-                "MISSING_VOTER_ID",
+              message: "Voter ID is required.",
+              code: "MISSING_VOTER_ID",
             },
             400
           );
@@ -1155,10 +1132,8 @@ export async function POST(
         const votersResponse =
           await callAppsScript({
             action: "getVoters",
-            electionId:
-              TEST_ELECTION_ID,
-            adminToken:
-              body.adminToken,
+            electionId,
+            adminToken: body.adminToken,
           });
 
         if (
@@ -1172,8 +1147,7 @@ export async function POST(
               success: false,
               message:
                 "Administrator authorization failed.",
-              code:
-                "UNAUTHORIZED",
+              code: "UNAUTHORIZED",
             },
             403
           );
@@ -1185,18 +1159,15 @@ export async function POST(
         const voter =
           voters.find(
             (item) =>
-              String(item.id) ===
-              voterId
+              String(item.id) === voterId
           );
 
         if (!voter) {
           return jsonResponse(
             {
               success: false,
-              message:
-                "Voter not found.",
-              code:
-                "VOTER_NOT_FOUND",
+              message: "Voter not found.",
+              code: "VOTER_NOT_FOUND",
             },
             404
           );
@@ -1206,17 +1177,14 @@ export async function POST(
 
         try {
           accessCode =
-            generateAccessCode(
-              voter.name
-            );
+            generateAccessCode(voter.name);
         } catch {
           return jsonResponse(
             {
               success: false,
               message:
                 "Unable to generate an access code for this voter.",
-              code:
-                "INVALID_VOTER_NAME",
+              code: "INVALID_VOTER_NAME",
             },
             400
           );
@@ -1224,27 +1192,21 @@ export async function POST(
 
         const issuedResponse =
           await callAppsScript({
-            action:
-              "issueVoterAccessCode",
-            electionId:
-              TEST_ELECTION_ID,
+            action: "issueVoterAccessCode",
+            electionId,
             voterId,
             accessCode,
-            adminToken:
-              body.adminToken,
+            adminToken: body.adminToken,
           });
 
-        if (
-          !issuedResponse.success
-        ) {
+        if (!issuedResponse.success) {
           return jsonResponse(
             {
               success: false,
               message:
                 issuedResponse.message ||
                 "Unable to issue access code.",
-              code:
-                "ISSUANCE_FAILED",
+              code: "ISSUANCE_FAILED",
             },
             400
           );
@@ -1267,8 +1229,7 @@ export async function POST(
         await callAppsScript({
           ...body,
           action,
-          electionId:
-            TEST_ELECTION_ID,
+          electionId,
         })
       );
     }
@@ -1280,8 +1241,7 @@ export async function POST(
     return jsonResponse(
       {
         success: false,
-        message:
-          "Invalid API action.",
+        message: "Invalid API action.",
         code: "INVALID_ACTION",
       },
       400

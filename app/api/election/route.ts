@@ -17,10 +17,17 @@ export const dynamic = "force-dynamic";
 
 const apiUrl = process.env.GOOGLE_APPS_SCRIPT_URL;
 
-const TEST_ELECTION_ID = "ACGC-MOCK-2026";
 const OFFICIAL_ELECTION_ID = "ACGC-GENERAL-2026";
 
+const OFFICIAL_VOTER_COUNT = 76;
+const BULK_BATCH_SIZE = 10;
+
 const MAX_REQUEST_BYTES = 16_384;
+
+const SESSION_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+
+const ACCESS_CODE_PATTERN =
+  /^[A-Z]{6}(?:-[A-Z0-9]{4}){3}$/;
 
 // =====================================================
 // API TYPES
@@ -42,7 +49,16 @@ type Voter = {
   name: string;
 };
 
-type BallotDecision = "YES" | "NO" | "ABSTAIN" | "SELECT";
+type CodeStatus = {
+  voterId: string;
+  status: string;
+};
+
+type BallotDecision =
+  | "YES"
+  | "NO"
+  | "ABSTAIN"
+  | "SELECT";
 
 type BallotSelection = {
   position: string;
@@ -69,11 +85,13 @@ const AUTH_ACTIONS = new Set([
 const ADMIN_READ_ACTIONS = new Set([
   "getVoters",
   "getVoterAccessCodeStatuses",
+  "verifyOfficialAccessCodeIntegrity",
   "getAdminCandidates",
   "getAnalytics",
   "getPollingDashboard",
   "getAdminResults",
   "getElectionReadiness",
+  "getElections",
 ]);
 
 const ADMIN_WRITE_ACTIONS = new Set([
@@ -84,12 +102,16 @@ const ADMIN_WRITE_ACTIONS = new Set([
   "updateCandidate",
   "deleteCandidate",
   "generateVoterAccessCode",
+  "generateBulkVoterAccessCodes",
 ]);
 
 const ELECTION_CONTROL_ACTIONS = new Set([
-  "closeElection",
-  "publishElectionResults",
-  "hideElectionResults",
+  "getOfficialElectionControlStatus",
+  "openOfficialElection",
+  "closeOfficialElection",
+  "previewOfficialElectionReset",
+  "publishOfficialElectionResults",
+  "hideOfficialElectionResults",
 ]);
 
 const SIGNED_VOTING_ACTIONS = new Set([
@@ -104,6 +126,9 @@ const DISABLED_ACTIONS = new Set([
   "submitVote",
   "issueVoterAccessCode",
   "openElection",
+  "closeElection",
+  "publishElectionResults",
+  "hideElectionResults",
   "updateElectionStatus",
   "resetElection",
   "testServerConnection",
@@ -145,7 +170,8 @@ function jsonResponse(
 function isLocalDevelopment(): boolean {
   return (
     process.env.NODE_ENV === "development" &&
-    process.env.ELECTION_DEPLOYMENT_MODE === "development"
+    process.env.ELECTION_DEPLOYMENT_MODE ===
+      "development"
   );
 }
 
@@ -159,12 +185,13 @@ function getTrustedClientIdentifier(
   /*
    * Production remains fail-closed.
    *
-   * Before deployment, implement trusted
-   * client identification using verified
-   * hosting-platform proxy behavior.
+   * Trusted client identification must be
+   * implemented using verified hosting
+   * infrastructure.
    *
-   * Do not blindly trust X-Forwarded-For.
+   * Never blindly trust X-Forwarded-For.
    */
+
   void request;
 
   return null;
@@ -216,15 +243,6 @@ function rateLimitError(
 // ELECTION VALIDATION
 // =====================================================
 
-function isTestElection(
-  electionId: unknown
-): boolean {
-  return (
-    typeof electionId === "string" &&
-    electionId.trim() === TEST_ELECTION_ID
-  );
-}
-
 function isOfficialElection(
   electionId: unknown
 ): boolean {
@@ -234,34 +252,12 @@ function isOfficialElection(
   );
 }
 
-function isAllowedElection(
-  electionId: unknown
-): boolean {
-  return (
-    isTestElection(electionId) ||
-    isOfficialElection(electionId)
-  );
-}
-
 function electionAccessError() {
   return jsonResponse(
     {
       success: false,
-      message:
-        "This election is not available.",
+      message: "This election is not available.",
       code: "ELECTION_NOT_ALLOWED",
-    },
-    403
-  );
-}
-
-function testElectionError() {
-  return jsonResponse(
-    {
-      success: false,
-      message:
-        "Voting is currently restricted to the TEST election.",
-      code: "TEST_ELECTION_ONLY",
     },
     403
   );
@@ -382,8 +378,7 @@ function createSignedServerRequest(
   const nonce = randomBytes(24)
     .toString("base64url");
 
-  const payloadJson =
-    JSON.stringify(payload);
+  const payloadJson = JSON.stringify(payload);
 
   const payloadHash = createHash("sha256")
     .update(payloadJson, "utf8")
@@ -444,8 +439,7 @@ async function callAppsScript(
     );
   }
 
-  const data: unknown =
-    await response.json();
+  const data: unknown = await response.json();
 
   if (
     !data ||
@@ -481,10 +475,8 @@ async function callSignedAppsScript(
         "text/plain;charset=utf-8",
     },
     body: JSON.stringify({
-      signedPayload:
-        signed.payloadJson,
-      serverAuth:
-        signed.serverAuth,
+      signedPayload: signed.payloadJson,
+      serverAuth: signed.serverAuth,
     }),
     redirect: "follow",
     cache: "no-store",
@@ -496,8 +488,7 @@ async function callSignedAppsScript(
     );
   }
 
-  const data: unknown =
-    await response.json();
+  const data: unknown = await response.json();
 
   if (
     !data ||
@@ -529,12 +520,13 @@ function validateBallotSelections(
   const selections: BallotSelection[] = [];
   const positions = new Set<string>();
 
-  const validDecisions = new Set<BallotDecision>([
-    "YES",
-    "NO",
-    "ABSTAIN",
-    "SELECT",
-  ]);
+  const validDecisions =
+    new Set<BallotDecision>([
+      "YES",
+      "NO",
+      "ABSTAIN",
+      "SELECT",
+    ]);
 
   for (const item of value) {
     if (
@@ -563,7 +555,9 @@ function validateBallotSelections(
       selection.candidateId.trim();
 
     const decision =
-      selection.decision.trim().toUpperCase() as BallotDecision;
+      selection.decision
+        .trim()
+        .toUpperCase() as BallotDecision;
 
     if (
       !position ||
@@ -608,6 +602,407 @@ function hasAdminToken(
     typeof body.adminToken === "string" &&
     body.adminToken.trim().length > 0
   );
+}
+
+// =====================================================
+// OFFICIAL BULK ACCESS-CODE GENERATION
+// =====================================================
+
+async function generateOfficialBulkBatch(
+  electionId: string,
+  adminToken: string
+): Promise<NextResponse> {
+  if (!isOfficialElection(electionId)) {
+    return electionAccessError();
+  }
+
+  // ============================================
+  // VERIFY ADMIN AND FETCH VOTERS
+  // ============================================
+
+  const votersResponse = await callAppsScript({
+    action: "getVoters",
+    electionId,
+    adminToken,
+  });
+
+  if (
+    !votersResponse.success ||
+    !Array.isArray(votersResponse.voters)
+  ) {
+    return jsonResponse(
+      {
+        success: false,
+        message:
+          "Administrator authorization failed or voter register unavailable.",
+        code: "VOTER_FETCH_FAILED",
+      },
+      403
+    );
+  }
+
+  const voters = votersResponse.voters as Voter[];
+
+  if (voters.length !== OFFICIAL_VOTER_COUNT) {
+    return jsonResponse(
+      {
+        success: false,
+        message:
+          `Expected ${OFFICIAL_VOTER_COUNT} official voters, found ${voters.length}.`,
+        code: "VOTER_COUNT_MISMATCH",
+      },
+      409
+    );
+  }
+
+  // ============================================
+  // VALIDATE VOTER REGISTER
+  // ============================================
+
+  const voterIds = new Set<string>();
+
+  for (const voter of voters) {
+    const voterId = String(
+      voter.id ?? ""
+    ).trim();
+
+    if (
+      !voterId ||
+      typeof voter.name !== "string" ||
+      !voter.name.trim() ||
+      voterIds.has(voterId)
+    ) {
+      return jsonResponse(
+        {
+          success: false,
+          message:
+            "The official voter register contains invalid or duplicate records.",
+          code: "INVALID_VOTER_REGISTER",
+        },
+        409
+      );
+    }
+
+    voterIds.add(voterId);
+  }
+
+  // ============================================
+  // VERIFY CREDENTIAL INTEGRITY
+  // ============================================
+
+  const integrityResponse = await callAppsScript({
+    action: "verifyOfficialAccessCodeIntegrity",
+    electionId,
+    adminToken,
+  });
+
+  if (
+    !integrityResponse.success ||
+    integrityResponse.valid !== true
+  ) {
+    return jsonResponse(
+      {
+        success: false,
+        message:
+          "Credential integrity verification failed. No codes were generated.",
+        code: "CREDENTIAL_INTEGRITY_FAILED",
+      },
+      409
+    );
+  }
+
+  // ============================================
+  // FETCH EXISTING CODE STATUSES
+  // ============================================
+
+  const statusesResponse = await callAppsScript({
+    action: "getVoterAccessCodeStatuses",
+    electionId,
+    adminToken,
+  });
+
+  if (
+    !statusesResponse.success ||
+    !Array.isArray(statusesResponse.codes)
+  ) {
+    return jsonResponse(
+      {
+        success: false,
+        message:
+          "Unable to retrieve existing credential statuses.",
+        code: "CODE_STATUS_FAILED",
+      },
+      503
+    );
+  }
+
+  const existingCodes =
+    statusesResponse.codes as CodeStatus[];
+
+  const activeCounts =
+    new Map<string, number>();
+
+  for (const record of existingCodes) {
+    const voterId = String(
+      record.voterId ?? ""
+    ).trim();
+
+    if (!voterIds.has(voterId)) {
+      return jsonResponse(
+        {
+          success: false,
+          message:
+            "Credential records reference an unknown voter.",
+          code: "UNKNOWN_CREDENTIAL_VOTER",
+        },
+        409
+      );
+    }
+
+    if (
+      String(record.status).trim() ===
+      "ACTIVE"
+    ) {
+      activeCounts.set(
+        voterId,
+        (activeCounts.get(voterId) || 0) + 1
+      );
+    }
+  }
+
+  // ============================================
+  // REJECT DUPLICATE ACTIVE CODES
+  // ============================================
+
+  for (const count of activeCounts.values()) {
+    if (count !== 1) {
+      return jsonResponse(
+        {
+          success: false,
+          message:
+            "Duplicate active credentials detected.",
+          code: "DUPLICATE_ACTIVE_CODES",
+        },
+        409
+      );
+    }
+  }
+
+  // ============================================
+  // IDENTIFY PENDING VOTERS
+  // ============================================
+
+  const pendingVoters = voters.filter(
+    (voter) =>
+      !activeCounts.has(
+        String(voter.id).trim()
+      )
+  );
+
+  if (pendingVoters.length === 0) {
+    return jsonResponse({
+      success: true,
+      message:
+        "All official voters already have active access codes.",
+      electionId,
+      generated: 0,
+      remaining: 0,
+      completed: true,
+      totalVoters: voters.length,
+    });
+  }
+
+  // ============================================
+  // PREPARE ONE BATCH
+  // ============================================
+
+  const batch =
+    pendingVoters.slice(0, BULK_BATCH_SIZE);
+
+  let codes: {
+    voterId: string;
+    accessCode: string;
+  }[];
+
+  try {
+    codes = batch.map((voter) => ({
+      voterId: String(voter.id).trim(),
+      accessCode: generateAccessCode(voter.name),
+    }));
+  } catch {
+    return jsonResponse(
+      {
+        success: false,
+        message:
+          "Unable to generate credentials for this batch.",
+        code: "GENERATION_FAILED",
+      },
+      400
+    );
+  }
+
+  // ============================================
+  // REGISTER BATCH
+  // ============================================
+
+  const result = await callAppsScript({
+    action: "generateBulkVoterAccessCodes",
+    electionId,
+    adminToken,
+    codes,
+  });
+
+  if (!result.success) {
+    return jsonResponse(
+      {
+        success: false,
+        message:
+          "Bulk registration failed. Verify credential integrity before retrying.",
+        code: "BULK_REGISTRATION_FAILED",
+      },
+      409
+    );
+  }
+
+  // ============================================
+  // VERIFY AFTER REGISTRATION
+  // ============================================
+
+  const finalIntegrity = await callAppsScript({
+    action: "verifyOfficialAccessCodeIntegrity",
+    electionId,
+    adminToken,
+  });
+
+  if (
+    !finalIntegrity.success ||
+    finalIntegrity.valid !== true
+  ) {
+    return jsonResponse(
+      {
+        success: false,
+        message:
+          "Post-registration integrity verification failed. Stop issuance and investigate.",
+        code: "POST_REGISTRATION_INTEGRITY_FAILED",
+      },
+      409
+    );
+  }
+
+  // ============================================
+  // VERIFY FINAL ACTIVE CODE COUNTS
+  // ============================================
+
+  const finalStatuses = await callAppsScript({
+    action: "getVoterAccessCodeStatuses",
+    electionId,
+    adminToken,
+  });
+
+  if (
+    !finalStatuses.success ||
+    !Array.isArray(finalStatuses.codes)
+  ) {
+    return jsonResponse(
+      {
+        success: false,
+        message:
+          "Unable to verify final credential statuses.",
+        code: "FINAL_STATUS_FAILED",
+      },
+      503
+    );
+  }
+
+  const finalActiveCounts =
+    new Map<string, number>();
+
+  for (const record of
+    finalStatuses.codes as CodeStatus[]) {
+    if (
+      String(record.status).trim() !==
+      "ACTIVE"
+    ) {
+      continue;
+    }
+
+    const voterId = String(
+      record.voterId ?? ""
+    ).trim();
+
+    if (!voterIds.has(voterId)) {
+      return jsonResponse(
+        {
+          success: false,
+          message:
+            "Unknown voter detected during final verification.",
+          code: "FINAL_INTEGRITY_FAILED",
+        },
+        409
+      );
+    }
+
+    finalActiveCounts.set(
+      voterId,
+      (finalActiveCounts.get(voterId) || 0) + 1
+    );
+  }
+
+  if (
+    [...finalActiveCounts.values()].some(
+      (count) => count !== 1
+    )
+  ) {
+    return jsonResponse(
+      {
+        success: false,
+        message:
+          "Duplicate active credentials detected after registration.",
+        code: "FINAL_INTEGRITY_FAILED",
+      },
+      409
+    );
+  }
+
+  const remaining =
+    voters.length - finalActiveCounts.size;
+
+  const generated = Number(result.generated);
+
+  if (
+    !Number.isInteger(generated) ||
+    generated !== batch.length ||
+    finalActiveCounts.size !==
+      activeCounts.size + batch.length
+  ) {
+    return jsonResponse(
+      {
+        success: false,
+        message:
+          "Unexpected credential count after registration. Stop and investigate.",
+        code: "CREDENTIAL_COUNT_MISMATCH",
+      },
+      409
+    );
+  }
+
+  // ============================================
+  // SUCCESS
+  // ============================================
+
+  return jsonResponse({
+    success: true,
+    message:
+      remaining === 0
+        ? "All official voter access codes have been registered."
+        : "Access-code batch registered successfully.",
+    electionId,
+    totalVoters: voters.length,
+    generated,
+    activeCodes: finalActiveCounts.size,
+    remaining,
+    completed: remaining === 0,
+  });
 }
 
 // =====================================================
@@ -821,12 +1216,11 @@ export async function POST(
         );
       }
 
-      const result =
-        await callAppsScript({
-          action: "loginAdmin",
-          username,
-          password,
-        });
+      const result = await callAppsScript({
+        action: "loginAdmin",
+        username,
+        password,
+      });
 
       return jsonResponse(
         result,
@@ -854,42 +1248,37 @@ export async function POST(
         );
       }
 
-      const result =
-        await callAppsScript({
-          action,
-          adminToken: body.adminToken,
-        });
+      const result = await callAppsScript({
+        action,
+        adminToken: body.adminToken,
+      });
 
       return jsonResponse(result);
     }
 
     // ============================================
-    // SECURE VOTING SESSION
+    // OFFICIAL VOTING SESSION
     // ============================================
 
     if (action === "createVotingSession") {
-      /*
-       * Voting remains restricted to the
-       * historical MOCK election.
-       *
-       * Official election voting is disabled.
-       */
-
-      if (!isTestElection(body.electionId)) {
-        return testElectionError();
+      if (!isOfficialElection(body.electionId)) {
+        return electionAccessError();
       }
 
       const accessCode =
         typeof body.accessCode === "string"
-          ? body.accessCode.trim().toUpperCase()
+          ? body.accessCode
+              .trim()
+              .toUpperCase()
           : "";
 
-      if (!accessCode) {
+      if (!ACCESS_CODE_PATTERN.test(accessCode)) {
         return jsonResponse(
           {
             success: false,
-            message: "Access code is required.",
-            code: "MISSING_CREDENTIALS",
+            message:
+              "Enter a valid voter access code.",
+            code: "INVALID_ACCESS_CODE",
           },
           400
         );
@@ -913,7 +1302,7 @@ export async function POST(
           {
             type: "voter-credential",
             identifier:
-              `${TEST_ELECTION_ID}:${accessCode}`,
+              `${OFFICIAL_ELECTION_ID}:${accessCode}`,
           },
         ]);
 
@@ -930,7 +1319,7 @@ export async function POST(
       const result =
         await callSignedAppsScript({
           action: "createVotingSession",
-          electionId: TEST_ELECTION_ID,
+          electionId: OFFICIAL_ELECTION_ID,
           accessCode,
           sessionToken,
         });
@@ -954,7 +1343,7 @@ export async function POST(
         success: true,
         message:
           "Voting session created successfully.",
-        electionId: TEST_ELECTION_ID,
+        electionId: OFFICIAL_ELECTION_ID,
         voter: result.voter,
         sessionToken,
         session: result.session,
@@ -962,17 +1351,12 @@ export async function POST(
     }
 
     // ============================================
-    // SECURE BALLOT SUBMISSION
+    // OFFICIAL BALLOT SUBMISSION
     // ============================================
 
     if (action === "submitBallot") {
-      /*
-       * Official ballot submission remains
-       * disabled until election opening.
-       */
-
-      if (!isTestElection(body.electionId)) {
-        return testElectionError();
+      if (!isOfficialElection(body.electionId)) {
+        return electionAccessError();
       }
 
       const sessionToken =
@@ -980,11 +1364,7 @@ export async function POST(
           ? body.sessionToken.trim()
           : "";
 
-      if (
-        !/^[A-Za-z0-9_-]{43}$/.test(
-          sessionToken
-        )
-      ) {
+      if (!SESSION_TOKEN_PATTERN.test(sessionToken)) {
         return jsonResponse(
           {
             success: false,
@@ -1013,10 +1393,43 @@ export async function POST(
         );
       }
 
+      const clientId =
+        getTrustedClientIdentifier(request);
+
+      if (!clientId) {
+        return rateLimitError(
+          "RATE_LIMIT_UNAVAILABLE"
+        );
+      }
+
+      const sessionIdentifier = createHash("sha256")
+        .update(sessionToken, "utf8")
+        .digest("hex");
+
+      const limits =
+        await checkMultipleRateLimits([
+          {
+            type: "voter-client",
+            identifier: clientId,
+          },
+          {
+            type: "voter-credential",
+            identifier:
+              `${OFFICIAL_ELECTION_ID}:SESSION:${sessionIdentifier}`,
+          },
+        ]);
+
+      if (!limits.allowed) {
+        return rateLimitError(
+          limits.reason,
+          limits.retryAfterSeconds
+        );
+      }
+
       const result =
         await callSignedAppsScript({
           action: "submitBallot",
-          electionId: TEST_ELECTION_ID,
+          electionId: OFFICIAL_ELECTION_ID,
           sessionToken,
           selections,
         });
@@ -1036,7 +1449,10 @@ export async function POST(
           },
           code === "BALLOT_SUBMISSION_DISABLED"
             ? 403
-            : 400
+            : code === "SUBMISSION_REQUIRES_REVIEW" ||
+                code === "BALLOT_REVIEW_REQUIRED"
+              ? 409
+              : 400
         );
       }
 
@@ -1045,6 +1461,7 @@ export async function POST(
         message:
           result.message ||
           "Your ballot has been submitted successfully.",
+        electionId: OFFICIAL_ELECTION_ID,
         status: result.status,
         reference: result.reference,
       });
@@ -1055,16 +1472,14 @@ export async function POST(
     // ============================================
 
     if (PUBLIC_ACTIONS.has(action)) {
-      if (!isAllowedElection(body.electionId)) {
+      if (!isOfficialElection(body.electionId)) {
         return electionAccessError();
       }
 
       return jsonResponse(
         await callAppsScript({
           action,
-          electionId: String(
-            body.electionId
-          ).trim(),
+          electionId: OFFICIAL_ELECTION_ID,
         })
       );
     }
@@ -1099,16 +1514,50 @@ export async function POST(
         );
       }
 
-      if (!isAllowedElection(body.electionId)) {
+      if (!isOfficialElection(body.electionId)) {
         return electionAccessError();
       }
 
-      const electionId = String(
-        body.electionId
-      ).trim();
+      const electionId =
+        OFFICIAL_ELECTION_ID;
+
+      const adminToken =
+        body.adminToken as string;
 
       // ==========================================
-      // ACCESS CODE GENERATION
+      // OFFICIAL INTEGRITY VERIFICATION
+      // ==========================================
+
+      if (
+        action ===
+        "verifyOfficialAccessCodeIntegrity"
+      ) {
+        return jsonResponse(
+          await callAppsScript({
+            action:
+              "verifyOfficialAccessCodeIntegrity",
+            electionId,
+            adminToken,
+          })
+        );
+      }
+
+      // ==========================================
+      // OFFICIAL BULK ACCESS-CODE GENERATION
+      // ==========================================
+
+      if (
+        action ===
+        "generateBulkVoterAccessCodes"
+      ) {
+        return generateOfficialBulkBatch(
+          electionId,
+          adminToken
+        );
+      }
+
+      // ==========================================
+      // INDIVIDUAL ACCESS-CODE GENERATION
       // ==========================================
 
       if (
@@ -1133,7 +1582,7 @@ export async function POST(
           await callAppsScript({
             action: "getVoters",
             electionId,
-            adminToken: body.adminToken,
+            adminToken,
           });
 
         if (
@@ -1156,11 +1605,10 @@ export async function POST(
         const voters =
           votersResponse.voters as Voter[];
 
-        const voter =
-          voters.find(
-            (item) =>
-              String(item.id) === voterId
-          );
+        const voter = voters.find(
+          (item) =>
+            String(item.id) === voterId
+        );
 
         if (!voter) {
           return jsonResponse(
@@ -1196,7 +1644,7 @@ export async function POST(
             electionId,
             voterId,
             accessCode,
-            adminToken: body.adminToken,
+            adminToken,
           });
 
         if (!issuedResponse.success) {
@@ -1246,6 +1694,7 @@ export async function POST(
       },
       400
     );
+
   } catch (error) {
     console.error(
       "Election API request failed:",

@@ -1,22 +1,29 @@
 "use client";
 
 import {
-  FormEvent,
+  type FormEvent,
   useEffect,
   useState,
 } from "react";
 
 import type { CandidateModalProps } from "./types";
 
+// =====================================================
+// OFFICIAL ACGC ELECTORAL POSITIONS
+// =====================================================
+
 export const CANDIDATE_POSITIONS = [
   "President",
-  "Vice President",
   "General Secretary",
   "Financial Secretary",
   "Organizing Secretary",
   "Public Relations Officer (PRO)",
   "Women’s Commissioner",
 ] as const;
+
+// =====================================================
+// CANDIDATE MODAL
+// =====================================================
 
 export default function CandidateModal({
   open,
@@ -26,26 +33,35 @@ export default function CandidateModal({
   onSave,
 }: CandidateModalProps) {
   const [name, setName] = useState("");
+
   const [position, setPosition] =
-    useState<string>(
-      CANDIDATE_POSITIONS[0]
-    );
+    useState<string>(CANDIDATE_POSITIONS[0]);
+
+  const [runningMate, setRunningMate] =
+    useState("");
+
   const [location, setLocation] =
     useState("");
+
   const [image, setImage] = useState("");
+
   const [error, setError] = useState("");
+
+  // =====================================================
+  // LOAD CANDIDATE DATA
+  // =====================================================
 
   useEffect(() => {
     if (candidate) {
       setName(candidate.name);
       setPosition(candidate.position);
-      setLocation(candidate.location);
+      setRunningMate(candidate.runningMate || "");
+      setLocation(candidate.location || "");
       setImage(candidate.image || "");
     } else {
       setName("");
-      setPosition(
-        CANDIDATE_POSITIONS[0]
-      );
+      setPosition(CANDIDATE_POSITIONS[0]);
+      setRunningMate("");
       setLocation("");
       setImage("");
     }
@@ -57,15 +73,17 @@ export default function CandidateModal({
     return null;
   }
 
+  // =====================================================
+  // FORM VALIDATION
+  // =====================================================
+
   function handleSubmit(
     event: FormEvent<HTMLFormElement>
   ) {
     event.preventDefault();
 
     if (!name.trim()) {
-      setError(
-        "Candidate name is required."
-      );
+      setError("Candidate name is required.");
       return;
     }
 
@@ -75,14 +93,18 @@ export default function CandidateModal({
           (typeof CANDIDATE_POSITIONS)[number]
       )
     ) {
-      setError(
-        "Please select a valid position."
-      );
+      setError("Please select a valid position.");
       return;
     }
 
-    if (!location.trim()) {
-      setError("Location is required.");
+    // Presidential candidates must have a running mate.
+    if (
+      position === "President" &&
+      !runningMate.trim()
+    ) {
+      setError(
+        "A presidential candidate must have a running mate."
+      );
       return;
     }
 
@@ -93,17 +115,27 @@ export default function CandidateModal({
       position,
       location: location.trim(),
       image: image.trim(),
+
+      // Only presidential candidates have running mates.
+      runningMate:
+        position === "President"
+          ? runningMate.trim()
+          : "",
     });
   }
 
+  // =====================================================
+  // RENDER
+  // =====================================================
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 px-4 py-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="candidate-modal-title"
     >
-      <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
+      <div className="my-auto w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
         <div className="mb-6">
           <h2
             id="candidate-modal-title"
@@ -134,6 +166,7 @@ export default function CandidateModal({
           onSubmit={handleSubmit}
           className="space-y-5"
         >
+          {/* CANDIDATE NAME */}
           <div>
             <label
               htmlFor="candidate-name"
@@ -151,10 +184,12 @@ export default function CandidateModal({
               }}
               disabled={loading}
               autoFocus
+              required
               className="w-full rounded-md border px-4 py-3"
             />
           </div>
 
+          {/* POSITION */}
           <div>
             <label
               htmlFor="candidate-position"
@@ -167,9 +202,7 @@ export default function CandidateModal({
               id="candidate-position"
               value={position}
               onChange={(event) => {
-                setPosition(
-                  event.target.value
-                );
+                setPosition(event.target.value);
                 setError("");
               }}
               disabled={loading}
@@ -188,6 +221,37 @@ export default function CandidateModal({
             </select>
           </div>
 
+          {/* PRESIDENTIAL RUNNING MATE */}
+          {position === "President" && (
+            <div>
+              <label
+                htmlFor="candidate-running-mate"
+                className="mb-2 block text-sm font-medium"
+              >
+                Running Mate
+              </label>
+
+              <input
+                id="candidate-running-mate"
+                value={runningMate}
+                onChange={(event) => {
+                  setRunningMate(event.target.value);
+                  setError("");
+                }}
+                disabled={loading}
+                placeholder="Enter running mate's full name"
+                required
+                className="w-full rounded-md border px-4 py-3"
+              />
+
+              <p className="mt-2 text-xs text-slate-500">
+                The running mate will be displayed
+                alongside the presidential candidate.
+              </p>
+            </div>
+          )}
+
+          {/* LOCATION */}
           <div>
             <label
               htmlFor="candidate-location"
@@ -200,17 +264,17 @@ export default function CandidateModal({
               id="candidate-location"
               value={location}
               onChange={(event) => {
-                setLocation(
-                  event.target.value
-                );
+                setLocation(event.target.value);
                 setError("");
               }}
               disabled={loading}
-              placeholder="Moscow"
+              placeholder="Optional - e.g. Moscow"
+              required
               className="w-full rounded-md border px-4 py-3"
             />
           </div>
 
+          {/* IMAGE */}
           <div>
             <label
               htmlFor="candidate-image"
@@ -238,6 +302,7 @@ export default function CandidateModal({
             </p>
           </div>
 
+          {/* ACTION BUTTONS */}
           <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"

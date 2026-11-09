@@ -1,20 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import {
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import Container from "@/components/layout/Container";
 import Section from "@/components/layout/Section";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   type AdminCandidate,
   type Id,
@@ -38,25 +29,17 @@ const POSITION_ORDER = [
   "Women’s Commissioner",
 ];
 
-function sortCandidates(
-  candidates: AdminCandidate[]
-): AdminCandidate[] {
+function sortCandidates(candidates: AdminCandidate[]): AdminCandidate[] {
   return [...candidates].sort((a, b) => {
-    const aPositionIndex =
-      POSITION_ORDER.indexOf(a.position);
+    const aPositionIndex = POSITION_ORDER.indexOf(a.position);
 
-    const bPositionIndex =
-      POSITION_ORDER.indexOf(b.position);
+    const bPositionIndex = POSITION_ORDER.indexOf(b.position);
 
     const normalizedAIndex =
-      aPositionIndex === -1
-        ? POSITION_ORDER.length
-        : aPositionIndex;
+      aPositionIndex === -1 ? POSITION_ORDER.length : aPositionIndex;
 
     const normalizedBIndex =
-      bPositionIndex === -1
-        ? POSITION_ORDER.length
-        : bPositionIndex;
+      bPositionIndex === -1 ? POSITION_ORDER.length : bPositionIndex;
 
     if (normalizedAIndex !== normalizedBIndex) {
       return normalizedAIndex - normalizedBIndex;
@@ -67,27 +50,18 @@ function sortCandidates(
 }
 
 export default function CandidateManager() {
-  const [candidates, setCandidates] = useState<
-    AdminCandidate[]
-  >([]);
+  const [candidates, setCandidates] = useState<AdminCandidate[]>([]);
   const [search, setSearch] = useState("");
-  const [isLoading, setIsLoading] =
-    useState(true);
-  const [isSaving, setIsSaving] =
-    useState(false);
-  const [
-    deletingCandidateId,
-    setDeletingCandidateId,
-  ] = useState<Id | null>(null);
-  const [isModalOpen, setIsModalOpen] =
-    useState(false);
-  const [
-    editingCandidate,
-    setEditingCandidate,
-  ] = useState<AdminCandidate | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [deletingCandidateId, setDeletingCandidateId] = useState<Id | null>(
+    null
+  );
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingCandidate, setEditingCandidate] =
+    useState<AdminCandidate | null>(null);
   const [error, setError] = useState("");
-  const [successMessage, setSuccessMessage] =
-    useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   useEffect(() => {
     let isMounted = true;
@@ -96,15 +70,10 @@ export default function CandidateManager() {
       try {
         setError("");
 
-        const response =
-          await getAdminCandidates();
+        const response = await getAdminCandidates();
 
         if (isMounted) {
-          setCandidates(
-            sortCandidates(
-              response.candidates || []
-            )
-          );
+          setCandidates(sortCandidates(response.candidates || []));
         }
       } catch (error) {
         if (isMounted) {
@@ -129,9 +98,7 @@ export default function CandidateManager() {
   }, []);
 
   const filteredCandidates = useMemo(() => {
-    const query = search
-      .trim()
-      .toLowerCase();
+    const query = search.trim().toLowerCase();
 
     if (!query) {
       return candidates;
@@ -139,18 +106,10 @@ export default function CandidateManager() {
 
     return candidates.filter((candidate) => {
       return (
-        candidate.name
-          .toLowerCase()
-          .includes(query) ||
-        candidate.position
-          .toLowerCase()
-          .includes(query) ||
-        candidate.location
-          .toLowerCase()
-          .includes(query) ||
-        String(candidate.id)
-          .toLowerCase()
-          .includes(query)
+        candidate.name.toLowerCase().includes(query) ||
+        candidate.position.toLowerCase().includes(query) ||
+        candidate.location.toLowerCase().includes(query) ||
+        String(candidate.id).toLowerCase().includes(query)
       );
     });
   }, [candidates, search]);
@@ -162,9 +121,7 @@ export default function CandidateManager() {
     setIsModalOpen(true);
   }
 
-  function openEditModal(
-    candidate: AdminCandidate
-  ) {
+  function openEditModal(candidate: AdminCandidate) {
     setEditingCandidate(candidate);
     setError("");
     setSuccessMessage("");
@@ -180,81 +137,62 @@ export default function CandidateManager() {
     setEditingCandidate(null);
   }
 
-  async function handleSave(
-    data: CandidateFormData
-  ) {
+  async function handleSave(data: CandidateFormData) {
     try {
       setIsSaving(true);
       setError("");
       setSuccessMessage("");
 
       if (editingCandidate) {
-        const response =
-          await updateCandidate(
-            editingCandidate.id,
-            data.name,
-            data.position,
-            data.location,
-            data.image
-          );
+        const response = await updateCandidate(
+          editingCandidate.id,
+          data.name,
+          data.position,
+          data.location,
+          data.image,
+          data.runningMate
+        );
 
         if (!response.candidate) {
-          setError(
-            response.message ||
-              "Unable to update candidate."
-          );
+          setError(response.message || "Unable to update candidate.");
           return;
         }
 
-        const updatedCandidate =
-          response.candidate;
+        const updatedCandidate = response.candidate;
 
-        setCandidates(
-          (currentCandidates) =>
-            sortCandidates(
-              currentCandidates.map(
-                (candidate) =>
-                  String(candidate.id) ===
-                  String(
-                    updatedCandidate.id
-                  )
-                    ? updatedCandidate
-                    : candidate
-              )
+        setCandidates((currentCandidates) =>
+          sortCandidates(
+            currentCandidates.map((candidate) =>
+              String(candidate.id) === String(updatedCandidate.id)
+                ? updatedCandidate
+                : candidate
             )
+          )
         );
 
-        setSuccessMessage(
-          "Candidate updated successfully."
-        );
+        setSuccessMessage("Candidate updated successfully.");
       } else {
-        const response =
-          await addCandidate(
-            data.name,
-            data.position,
-            data.location,
-            data.image
-          );
+        const response = await addCandidate(
+          data.name,
+          data.position,
+          data.location,
+          data.image,
+          data.runningMate
+        );
 
         if (!response.candidate) {
-          setError(
-            response.message ||
-              "Unable to add candidate."
-          );
+          setError(response.message || "Unable to add candidate.");
           return;
         }
 
-        setCandidates(
-          (currentCandidates) =>
-            sortCandidates([
-              ...currentCandidates,
-              response.candidate as AdminCandidate,
-            ])
+        setCandidates((currentCandidates) =>
+          sortCandidates([
+            ...currentCandidates,
+            response.candidate as AdminCandidate,
+          ])
         );
 
-        setSuccessMessage(
-          "Candidate added successfully."
-        );
+        setSuccessMessage("Candidate added successfully.");
       }
 
       setIsModalOpen(false);
@@ -264,17 +202,15 @@ export default function CandidateManager() {
         error instanceof Error
           ? error.message
           : editingCandidate
-            ? "Unable to update candidate."
-            : "Unable to add candidate."
+          ? "Unable to update candidate."
+          : "Unable to add candidate."
       );
     } finally {
       setIsSaving(false);
     }
   }
 
-  async function handleDelete(
-    candidate: AdminCandidate
-  ) {
+  async function handleDelete(candidate: AdminCandidate) {
     const confirmed = window.confirm(
       `Delete ${candidate.name} from the ${candidate.position} race?\n\nThis action cannot be undone.`
     );
@@ -290,23 +226,17 @@ export default function CandidateManager() {
 
       await deleteCandidate(candidate.id);
 
-      setCandidates(
-        (currentCandidates) =>
-          currentCandidates.filter(
-            (currentCandidate) =>
-              String(currentCandidate.id) !==
-              String(candidate.id)
-          )
+      setCandidates((currentCandidates) =>
+        currentCandidates.filter(
+          (currentCandidate) =>
+            String(currentCandidate.id) !== String(candidate.id)
+        )
       );
 
-      setSuccessMessage(
-        `${candidate.name} was deleted successfully.`
-      );
+      setSuccessMessage(`${candidate.name} was deleted successfully.`);
     } catch (error) {
       setError(
-        error instanceof Error
-          ? error.message
-          : "Unable to delete candidate."
+        error instanceof Error ? error.message : "Unable to delete candidate."
       );
     } finally {
       setDeletingCandidateId(null);
@@ -317,9 +247,7 @@ export default function CandidateManager() {
     return (
       <Section>
         <Container>
-          <p className="text-center text-slate-600">
-            Loading candidates...
-          </p>
+          <p className="text-center text-slate-600">Loading candidates...</p>
         </Container>
       </Section>
     );
@@ -342,8 +270,7 @@ export default function CandidateManager() {
             </h1>
 
             <p className="mt-2 text-slate-600">
-              Add, edit and manage election
-              candidates.
+              Add, edit and manage election candidates.
             </p>
           </div>
 
@@ -371,16 +298,12 @@ export default function CandidateManager() {
         <Card>
           <CardHeader>
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <CardTitle>
-                Candidates ({candidates.length})
-              </CardTitle>
+              <CardTitle>Candidates ({candidates.length})</CardTitle>
 
               <input
                 type="search"
                 value={search}
-                onChange={(event) =>
-                  setSearch(event.target.value)
-                }
+                onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search candidates..."
                 className="w-full rounded-md border px-4 py-2 outline-none focus:ring-2 focus:ring-green-700 sm:w-72"
               />
@@ -390,9 +313,7 @@ export default function CandidateManager() {
           <CardContent>
             <CandidateTable
               candidates={filteredCandidates}
-              deletingCandidateId={
-                deletingCandidateId
-              }
+              deletingCandidateId={deletingCandidateId}
               onEdit={openEditModal}
               onDelete={handleDelete}
             />

@@ -119,6 +119,7 @@ const SIGNED_VOTING_ACTIONS = new Set([
   "submitBallot",
 ]);
 
+
 const DISABLED_ACTIONS = new Set([
   "searchVoters",
   "verifyVoter",
@@ -131,9 +132,9 @@ const DISABLED_ACTIONS = new Set([
   "hideElectionResults",
   "updateElectionStatus",
   "resetElection",
-  "testServerConnection",
   "signedPayload",
   "serverAuth",
+  "testServerConnection",
 ]);
 
 const ALLOWED_ACTIONS = new Set([
@@ -178,23 +179,43 @@ function isLocalDevelopment(): boolean {
 function getTrustedClientIdentifier(
   request: NextRequest
 ): string | null {
+  // Local development only.
   if (isLocalDevelopment()) {
     return "local-development-client";
   }
 
+  // Only enable production identification on Vercel.
+  if (
+    process.env.VERCEL !== "1" ||
+    process.env.ELECTION_DEPLOYMENT_MODE !== "production"
+  ) {
+    return null;
+  }
+
   /*
-   * Production remains fail-closed.
+   * Vercel provides the client IP through
+   * its proxy infrastructure.
    *
-   * Trusted client identification must be
-   * implemented using verified hosting
-   * infrastructure.
-   *
-   * Never blindly trust X-Forwarded-For.
+   * This relies on Vercel's trusted proxy
+   * configuration and must be verified
+   * before enabling official voting.
    */
+  const forwardedFor =
+    request.headers.get("x-forwarded-for");
 
-  void request;
+  if (!forwardedFor) {
+    return null;
+  }
 
-  return null;
+  const clientIp = forwardedFor
+    .split(",")[0]
+    .trim();
+
+  if (!clientIp) {
+    return null;
+  }
+
+  return `vercel:${clientIp}`;
 }
 
 // =====================================================
@@ -1161,6 +1182,7 @@ export async function POST(
       );
     }
 
+
     // ============================================
     // ADMIN LOGIN
     // ============================================
@@ -1523,6 +1545,34 @@ export async function POST(
 
       const adminToken =
         body.adminToken as string;
+      
+      // ==========================================
+// ADMIN OPERATION RATE LIMITING
+// ==========================================
+
+const clientId =
+getTrustedClientIdentifier(request);
+
+if (!clientId) {
+return rateLimitError(
+  "RATE_LIMIT_UNAVAILABLE"
+);
+}
+
+const adminLimits =
+await checkMultipleRateLimits([
+  {
+    type: "admin-operation",
+    identifier: clientId,
+  },
+]);
+
+if (!adminLimits.allowed) {
+return rateLimitError(
+  adminLimits.reason,
+  adminLimits.retryAfterSeconds
+);
+}
 
       // ==========================================
       // OFFICIAL INTEGRITY VERIFICATION

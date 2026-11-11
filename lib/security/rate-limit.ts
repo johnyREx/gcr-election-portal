@@ -28,7 +28,8 @@ type RateLimitType =
   | "voter-client"
   | "voter-credential"
   | "admin-client"
-  | "admin-credential";
+  | "admin-credential"
+  | "admin-operation";
 
 type RateLimitResult = {
   allowed: boolean;
@@ -76,6 +77,12 @@ const limiters: Record<RateLimitType, Ratelimit | null> = {
     5,
     "5 m",
     "acgc:security:admin-credential"
+  ),
+
+  "admin-operation": createLimiter(
+    60,
+    "1 m",
+    "acgc:security:admin-operation"
   ),
 };
 

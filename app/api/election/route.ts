@@ -850,7 +850,7 @@ async function generateOfficialBulkBatch(
       voterId: String(voter.id).trim(),
       accessCode: generateAccessCode(voter.name),
     }));
-  } catch {
+  } catch  (error) {
     return jsonResponse(
       {
         success: false,

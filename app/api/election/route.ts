@@ -335,9 +335,7 @@ function buildPrefix(name: string): string {
     .filter(Boolean);
 
   if (parts.length < 2) {
-    throw new Error(
-      "First and last names are required."
-    );
+    throw new Error("Voter name is required.");
   }
 
   const first = parts[0]
@@ -345,7 +343,7 @@ function buildPrefix(name: string): string {
     .slice(0, 3)
     .padEnd(3, "X");
 
-  const last = parts[parts.length - 1]
+  const last = (parts.length === 1 ? "XXX" : parts[parts.length - 1])
     .replace(/[^A-Z]/g, "")
     .slice(0, 3)
     .padEnd(3, "X");

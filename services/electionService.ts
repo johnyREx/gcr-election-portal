@@ -114,6 +114,26 @@ export interface GenerateVoterAccessCodeResponse
   voterId: string;
 }
 
+export interface BulkGeneratedAccessCode {
+  voterId: string;
+  voterName: string;
+  accessCode: string;
+}
+
+export interface GenerateBulkVoterAccessCodesResponse
+  extends ApiResponse {
+  electionId: string;
+  totalVoters: number;
+  generated: number;
+  activeCodes: number;
+  remaining: number;
+  completed: boolean;
+  codes?: {
+    voterId: string;
+    accessCode: string;
+  }[];
+}
+
 // =====================================================
 // CANDIDATES
 // =====================================================
@@ -596,6 +616,23 @@ export async function generateVoterAccessCode(
     electionId: ELECTION_ID,
     voterId,
   });
+}
+
+/**
+ * Generate access codes for voters who
+ * do not already have active codes.
+ *
+ * The backend processes up to 10 voters
+ * per request.
+ *
+ * Plaintext codes are returned once.
+ */
+ export async function generateBulkVoterAccessCodes():
+ Promise<GenerateBulkVoterAccessCodesResponse> {
+ return callElectionApi<GenerateBulkVoterAccessCodesResponse>({
+   action: "generateBulkVoterAccessCodes",
+   electionId: ELECTION_ID,
+ });
 }
 
 // =====================================================

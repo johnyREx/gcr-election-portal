@@ -1023,6 +1023,7 @@ async function generateOfficialBulkBatch(
     activeCodes: finalActiveCounts.size,
     remaining,
     completed: remaining === 0,
+    codes,
   });
 }
 

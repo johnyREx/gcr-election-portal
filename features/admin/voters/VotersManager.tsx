@@ -13,17 +13,13 @@ import {
 import Container from "@/components/layout/Container";
 import Section from "@/components/layout/Section";
 
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 import {
   addVoter,
   AdminVoter,
   generateVoterAccessCode,
+  generateBulkVoterAccessCodes,
   getVoterAccessCodeStatuses,
   getVoters,
   updateVoter,
@@ -32,6 +28,7 @@ import {
 } from "@/services/electionService";
 
 import CsvImportButton from "./CsvImportButton";
+import { Button } from "@/components/ui/button";
 
 const GENDER_OPTIONS = ["Male", "Female"] as const;
 
@@ -57,59 +54,55 @@ export default function VotersManager() {
   const [voters, setVoters] = useState<AdminVoter[]>([]);
   const [search, setSearch] = useState("");
 
-  const [accessCodes, setAccessCodes] = useState<
-    VoterAccessCodeStatus[]
-  >([]);
+  const [accessCodes, setAccessCodes] = useState<VoterAccessCodeStatus[]>([]);
 
-  const [accessCodesLoaded, setAccessCodesLoaded] =
-    useState(false);
+  const [accessCodesLoaded, setAccessCodesLoaded] = useState(false);
 
-  const [accessCodeError, setAccessCodeError] =
-    useState("");
+  const [accessCodeError, setAccessCodeError] = useState("");
 
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] =
-    useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [isSaving, setIsSaving] = useState(false);
-  const [isModalOpen, setIsModalOpen] =
-    useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const [editingVoter, setEditingVoter] =
-    useState<AdminVoter | null>(null);
+  const [editingVoter, setEditingVoter] = useState<AdminVoter | null>(null);
 
   const [name, setName] = useState("");
 
-  const [gender, setGender] =
-    useState<VoterInput["gender"]>("Male");
+  const [gender, setGender] = useState<VoterInput["gender"]>("Male");
 
   const [location, setLocation] = useState("");
 
   const [error, setError] = useState("");
-  const [successMessage, setSuccessMessage] =
-    useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [formError, setFormError] = useState("");
 
   // =====================================================
   // ACCESS-CODE GENERATION STATE
   // =====================================================
 
-  const [selectedVoter, setSelectedVoter] =
-    useState<AdminVoter | null>(null);
+  const [selectedVoter, setSelectedVoter] = useState<AdminVoter | null>(null);
 
-  const [isGenerating, setIsGenerating] =
-    useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const generatingRef = useRef(false);
 
-  const [generationError, setGenerationError] =
-    useState("");
+  const [generationError, setGenerationError] = useState("");
 
-  const [generatedCode, setGeneratedCode] =
-    useState<GeneratedCode | null>(null);
+  const [generatedCode, setGeneratedCode] = useState<GeneratedCode | null>(
+    null
+  );
 
-  const [codeCopied, setCodeCopied] =
-    useState(false);
+  const [bulkGeneratedCodes, setBulkGeneratedCodes] = useState<
+    {
+      voterId: string;
+      voterName: string;
+      accessCode: string;
+    }[]
+  >([]);
+
+  const [codeCopied, setCodeCopied] = useState(false);
 
   // =====================================================
   // LOAD VOTERS
@@ -122,9 +115,7 @@ export default function VotersManager() {
       const response = await getVoters();
 
       setVoters(
-        [...response.voters].sort((a, b) =>
-          a.name.localeCompare(b.name)
-        )
+        [...response.voters].sort((a, b) => a.name.localeCompare(b.name))
       );
     } catch (caughtError) {
       setError(
@@ -146,8 +137,7 @@ export default function VotersManager() {
       setAccessCodeError("");
       setAccessCodesLoaded(false);
 
-      const response =
-        await getVoterAccessCodeStatuses();
+      const response = await getVoterAccessCodeStatuses();
 
       setAccessCodes(response.codes || []);
       setAccessCodesLoaded(true);
@@ -167,10 +157,7 @@ export default function VotersManager() {
     setIsRefreshing(true);
 
     try {
-      await Promise.all([
-        loadVoters(),
-        loadAccessCodes(),
-      ]);
+      await Promise.all([loadVoters(), loadAccessCodes()]);
     } finally {
       setIsRefreshing(false);
     }
@@ -185,19 +172,13 @@ export default function VotersManager() {
   // =====================================================
 
   const accessCodeByVoter = useMemo(() => {
-    const lookup = new Map<
-      string,
-      VoterAccessCodeStatus
-    >();
+    const lookup = new Map<string, VoterAccessCodeStatus>();
 
     for (const record of accessCodes) {
       const voterId = String(record.voterId);
       const existing = lookup.get(voterId);
 
-      if (
-        !existing ||
-        record.status === "ACTIVE"
-      ) {
+      if (!existing || record.status === "ACTIVE") {
         lookup.set(voterId, record);
       }
     }
@@ -206,15 +187,10 @@ export default function VotersManager() {
   }, [accessCodes]);
 
   function hasActiveCode(voterId: string | number) {
-    return (
-      accessCodeByVoter.get(String(voterId))
-        ?.status === "ACTIVE"
-    );
+    return accessCodeByVoter.get(String(voterId))?.status === "ACTIVE";
   }
 
-  const issuedCount = voters.filter((voter) =>
-    hasActiveCode(voter.id)
-  ).length;
+  const issuedCount = voters.filter((voter) => hasActiveCode(voter.id)).length;
 
   // =====================================================
   // SEARCH AND STATISTICS
@@ -237,17 +213,13 @@ export default function VotersManager() {
     });
   }, [search, voters]);
 
-  const maleCount = voters.filter(
-    (voter) => voter.gender === "Male"
-  ).length;
+  const maleCount = voters.filter((voter) => voter.gender === "Male").length;
 
   const femaleCount = voters.filter(
     (voter) => voter.gender === "Female"
   ).length;
 
-  const votedCount = voters.filter(
-    (voter) => voter.hasVoted
-  ).length;
+  const votedCount = voters.filter((voter) => voter.hasVoted).length;
 
   // =====================================================
   // ADD / EDIT MODAL
@@ -267,11 +239,7 @@ export default function VotersManager() {
     setEditingVoter(voter);
     setName(voter.name);
 
-    setGender(
-      voter.gender === "Female"
-        ? "Female"
-        : "Male"
-    );
+    setGender(voter.gender === "Female" ? "Female" : "Male");
 
     setLocation(voter.location);
     setFormError("");
@@ -296,9 +264,7 @@ export default function VotersManager() {
   // CSV IMPORT
   // =====================================================
 
-  function handleImportComplete(
-    _importedVoters: AdminVoter[]
-  ) {
+  function handleImportComplete(_importedVoters: AdminVoter[]) {
     void refreshData();
     setError("");
   }
@@ -317,9 +283,7 @@ export default function VotersManager() {
   // ADD / UPDATE VOTER
   // =====================================================
 
-  async function handleSubmit(
-    event: FormEvent<HTMLFormElement>
-  ) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     setFormError("");
@@ -356,38 +320,23 @@ export default function VotersManager() {
       setIsSaving(true);
 
       if (editingVoter) {
-        const response = await updateVoter(
-          editingVoter.id,
-          voterInput
-        );
+        const response = await updateVoter(editingVoter.id, voterInput);
 
         if (!response.voter) {
-          setFormError(
-            response.message ||
-              "Unable to update voter."
-          );
+          setFormError(response.message || "Unable to update voter.");
           return;
         }
 
-        setSuccessMessage(
-          "Voter updated successfully."
-        );
+        setSuccessMessage("Voter updated successfully.");
       } else {
-        const response = await addVoter(
-          voterInput
-        );
+        const response = await addVoter(voterInput);
 
         if (!response.voter) {
-          setFormError(
-            response.message ||
-              "Unable to add voter."
-          );
+          setFormError(response.message || "Unable to add voter.");
           return;
         }
 
-        setSuccessMessage(
-          "Voter registered successfully."
-        );
+        setSuccessMessage("Voter registered successfully.");
       }
 
       setIsModalOpen(false);
@@ -440,11 +389,7 @@ export default function VotersManager() {
   // =====================================================
 
   async function handleGenerateCode() {
-    if (
-      !selectedVoter ||
-      generatingRef.current ||
-      generatedCode
-    ) {
+    if (!selectedVoter || generatingRef.current || generatedCode) {
       return;
     }
 
@@ -457,34 +402,26 @@ export default function VotersManager() {
     try {
       // Recheck current issuance status before
       // attempting to create a credential.
-      const statusResponse =
-        await getVoterAccessCodeStatuses();
+      const statusResponse = await getVoterAccessCodeStatuses();
 
-      const alreadyIssued =
-        statusResponse.codes.some(
-          (record) =>
-            String(record.voterId) ===
-              String(voter.id) &&
-            record.status === "ACTIVE"
-        );
+      const alreadyIssued = statusResponse.codes.some(
+        (record) =>
+          String(record.voterId) === String(voter.id) &&
+          record.status === "ACTIVE"
+      );
 
       setAccessCodes(statusResponse.codes);
       setAccessCodesLoaded(true);
 
       if (alreadyIssued) {
-        setGenerationError(
-          "This voter already has an active access code."
-        );
+        setGenerationError("This voter already has an active access code.");
         return;
       }
 
-      const response =
-        await generateVoterAccessCode(voter.id);
+      const response = await generateVoterAccessCode(voter.id);
 
       if (!response.accessCode) {
-        throw new Error(
-          "The server did not return the generated access code."
-        );
+        throw new Error("The server did not return the generated access code.");
       }
 
       // Keep the plaintext credential in
@@ -513,6 +450,55 @@ export default function VotersManager() {
     }
   }
 
+  async function handleGenerateBulkCodes() {
+    const confirmed = window.confirm(
+      "Generate all remaining voter access codes?\n\n" +
+        "The system will process up to 10 voters per batch.\n" +
+        "All codes will be stored in the private Google Sheet.\n\n" +
+        "Do you want to continue?"
+    );
+
+    if (!confirmed) return;
+
+    let totalGenerated = 0;
+    let completed = false;
+
+    try {
+      while (!completed) {
+        const response = await generateBulkVoterAccessCodes();
+
+        if (!response.success) {
+          throw new Error(response.message || "Bulk generation failed.");
+        }
+
+        totalGenerated += response.generated;
+        completed = response.completed;
+
+        if (!completed && response.generated === 0) {
+          throw new Error("No progress was made. Bulk generation stopped.");
+        }
+      }
+
+      window.alert(
+        `Bulk generation completed!\n\n` +
+          `${totalGenerated} new access codes generated.\n` +
+          `All 76 voters should now have active access codes.\n\n` +
+          `Check your private Google Sheet to confirm.`
+      );
+
+      // Refresh voter access-code statuses.
+      await loadAccessCodes();
+    } catch (error) {
+      window.alert(
+        `Bulk generation stopped after ${totalGenerated} codes.\n\n` +
+          (error instanceof Error
+            ? error.message
+            : "An unexpected error occurred.") +
+          "\n\nCheck your private Google Sheet before retrying."
+      );
+    }
+  }
+
   // =====================================================
   // COPY GENERATED CODE
   // =====================================================
@@ -523,9 +509,7 @@ export default function VotersManager() {
     }
 
     try {
-      await navigator.clipboard.writeText(
-        generatedCode.accessCode
-      );
+      await navigator.clipboard.writeText(generatedCode.accessCode);
 
       setCodeCopied(true);
     } catch {
@@ -556,9 +540,7 @@ export default function VotersManager() {
     setGeneratedCode(null);
     setCodeCopied(false);
 
-    setSuccessMessage(
-      "Access code issued successfully."
-    );
+    setSuccessMessage("Access code issued successfully.");
 
     void loadAccessCodes();
   }
@@ -567,20 +549,12 @@ export default function VotersManager() {
   // ACCESS-CODE BADGE
   // =====================================================
 
-  function renderAccessCodeStatus(
-    voter: AdminVoter
-  ) {
+  function renderAccessCodeStatus(voter: AdminVoter) {
     if (!accessCodesLoaded) {
-      return (
-        <span className="text-sm text-amber-700">
-          Unavailable
-        </span>
-      );
+      return <span className="text-sm text-amber-700">Unavailable</span>;
     }
 
-    const record = accessCodeByVoter.get(
-      String(voter.id)
-    );
+    const record = accessCodeByVoter.get(String(voter.id));
 
     if (!record) {
       return (
@@ -631,9 +605,7 @@ export default function VotersManager() {
     return (
       <Section>
         <Container>
-          <p className="text-center text-slate-600">
-            Loading voters...
-          </p>
+          <p className="text-center text-slate-600">Loading voters...</p>
         </Container>
       </Section>
     );
@@ -662,9 +634,8 @@ export default function VotersManager() {
             </h1>
 
             <p className="mt-2 text-slate-600">
-              Manage voter registration,
-              demographics, access codes,
-              and voting participation.
+              Manage voter registration, demographics, access codes, and voting
+              participation.
             </p>
           </div>
 
@@ -675,9 +646,7 @@ export default function VotersManager() {
               disabled={isRefreshing || isGenerating}
               className="rounded-md border border-slate-300 bg-white px-4 py-3 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
             >
-              {isRefreshing
-                ? "Refreshing..."
-                : "Refresh"}
+              {isRefreshing ? "Refreshing..." : "Refresh"}
             </button>
 
             <CsvImportButton
@@ -685,6 +654,14 @@ export default function VotersManager() {
               onMessage={handleImportMessage}
               onError={handleImportError}
             />
+
+            <Button
+              type="button"
+              onClick={handleGenerateBulkCodes}
+              className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+            >
+              🔐 Generate All Remaining Codes
+            </Button>
 
             <button
               type="button"
@@ -706,8 +683,7 @@ export default function VotersManager() {
 
         {accessCodeError && (
           <div className="mb-6 rounded-md bg-amber-50 px-4 py-3 text-amber-800">
-            Access-code statuses could not be
-            loaded: {accessCodeError}
+            Access-code statuses could not be loaded: {accessCodeError}
           </div>
         )}
 
@@ -735,9 +711,7 @@ export default function VotersManager() {
             },
             {
               label: "Access Codes Issued",
-              value: accessCodesLoaded
-                ? issuedCount
-                : "—",
+              value: accessCodesLoaded ? issuedCount : "—",
             },
             {
               label: "Votes Cast",
@@ -746,9 +720,7 @@ export default function VotersManager() {
           ].map((item) => (
             <Card key={item.label}>
               <CardContent className="p-5">
-                <p className="text-sm text-slate-500">
-                  {item.label}
-                </p>
+                <p className="text-sm text-slate-500">{item.label}</p>
 
                 <p className="mt-2 text-3xl font-bold text-slate-900">
                   {item.value}
@@ -763,16 +735,12 @@ export default function VotersManager() {
         <Card>
           <CardHeader>
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <CardTitle>
-                Registered Voters ({voters.length})
-              </CardTitle>
+              <CardTitle>Registered Voters ({voters.length})</CardTitle>
 
               <input
                 type="search"
                 value={search}
-                onChange={(event) =>
-                  setSearch(event.target.value)
-                }
+                onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search name, city, gender or ID..."
                 className="w-full rounded-md border px-4 py-2 outline-none focus:ring-2 focus:ring-green-700 sm:w-80"
               />
@@ -784,40 +752,25 @@ export default function VotersManager() {
               <table className="w-full min-w-[1100px] text-left">
                 <thead>
                   <tr className="border-b text-sm text-slate-500">
-                    <th className="px-3 py-3 font-medium">
-                      Name
-                    </th>
+                    <th className="px-3 py-3 font-medium">Name</th>
 
-                    <th className="px-3 py-3 font-medium">
-                      Gender
-                    </th>
+                    <th className="px-3 py-3 font-medium">Gender</th>
 
-                    <th className="px-3 py-3 font-medium">
-                      City
-                    </th>
+                    <th className="px-3 py-3 font-medium">City</th>
 
-                    <th className="px-3 py-3 font-medium">
-                      Access Code
-                    </th>
+                    <th className="px-3 py-3 font-medium">Access Code</th>
 
-                    <th className="px-3 py-3 font-medium">
-                      Voting Status
-                    </th>
+                    <th className="px-3 py-3 font-medium">Voting Status</th>
 
-                    <th className="px-3 py-3 font-medium">
-                      Voted At
-                    </th>
+                    <th className="px-3 py-3 font-medium">Voted At</th>
 
-                    <th className="px-3 py-3 font-medium">
-                      Actions
-                    </th>
+                    <th className="px-3 py-3 font-medium">Actions</th>
                   </tr>
                 </thead>
 
                 <tbody>
                   {filteredVoters.map((voter) => {
-                    const activeCode =
-                      hasActiveCode(voter.id);
+                    const activeCode = hasActiveCode(voter.id);
 
                     const canGenerate =
                       accessCodesLoaded &&
@@ -827,10 +780,7 @@ export default function VotersManager() {
                       !generatedCode;
 
                     return (
-                      <tr
-                        key={voter.id}
-                        className="border-b last:border-b-0"
-                      >
+                      <tr key={voter.id} className="border-b last:border-b-0">
                         <td className="px-3 py-4 font-medium text-slate-900">
                           {voter.name}
                         </td>
@@ -844,9 +794,7 @@ export default function VotersManager() {
                         </td>
 
                         <td className="px-3 py-4">
-                          {renderAccessCodeStatus(
-                            voter
-                          )}
+                          {renderAccessCodeStatus(voter)}
                         </td>
 
                         <td className="px-3 py-4">
@@ -857,9 +805,7 @@ export default function VotersManager() {
                                 : "rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-600"
                             }
                           >
-                            {voter.hasVoted
-                              ? "Voted"
-                              : "Not voted"}
+                            {voter.hasVoted ? "Voted" : "Not voted"}
                           </span>
                         </td>
 
@@ -871,9 +817,7 @@ export default function VotersManager() {
                           <div className="flex flex-col items-start gap-2">
                             <button
                               type="button"
-                              onClick={() =>
-                                openEditModal(voter)
-                              }
+                              onClick={() => openEditModal(voter)}
                               disabled={voter.hasVoted}
                               className="font-medium text-green-700 hover:underline disabled:cursor-not-allowed disabled:text-slate-400"
                             >
@@ -891,11 +835,7 @@ export default function VotersManager() {
                             ) : (
                               <button
                                 type="button"
-                                onClick={() =>
-                                  openGenerateCodeModal(
-                                    voter
-                                  )
-                                }
+                                onClick={() => openGenerateCodeModal(voter)}
                                 disabled={!canGenerate}
                                 className="rounded-md border border-green-700 px-3 py-2 text-xs font-semibold text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-40"
                               >
@@ -929,9 +869,7 @@ export default function VotersManager() {
           <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
             <div className="mb-6">
               <h2 className="text-2xl font-bold text-slate-900">
-                {editingVoter
-                  ? "Edit Voter"
-                  : "Register New Voter"}
+                {editingVoter ? "Edit Voter" : "Register New Voter"}
               </h2>
 
               <p className="mt-2 text-sm text-slate-600">
@@ -947,10 +885,7 @@ export default function VotersManager() {
               </div>
             )}
 
-            <form
-              onSubmit={handleSubmit}
-              className="space-y-5"
-            >
+            <form onSubmit={handleSubmit} className="space-y-5">
               {/* NAME */}
 
               <div>
@@ -966,28 +901,21 @@ export default function VotersManager() {
                   type="text"
                   required
                   value={name}
-                  onChange={(event) =>
-                    setName(event.target.value)
-                  }
+                  onChange={(event) => setName(event.target.value)}
                   placeholder="Enter full name"
                   disabled={
                     isSaving ||
-                    Boolean(
-                      editingVoter &&
-                      hasActiveCode(editingVoter.id)
-                    )
+                    Boolean(editingVoter && hasActiveCode(editingVoter.id))
                   }
                   className="w-full rounded-md border px-4 py-3 outline-none focus:ring-2 focus:ring-green-700 disabled:opacity-60"
                 />
 
-                {editingVoter &&
-                  hasActiveCode(editingVoter.id) && (
-                    <p className="mt-2 text-xs text-amber-700">
-                      Name changes are disabled
-                      after an access code has been
-                      issued.
-                    </p>
-                  )}
+                {editingVoter && hasActiveCode(editingVoter.id) && (
+                  <p className="mt-2 text-xs text-amber-700">
+                    Name changes are disabled after an access code has been
+                    issued.
+                  </p>
+                )}
               </div>
 
               {/* GENDER */}
@@ -1004,18 +932,13 @@ export default function VotersManager() {
                   id="voter-gender"
                   value={gender}
                   onChange={(event) =>
-                    setGender(
-                      event.target.value as VoterInput["gender"]
-                    )
+                    setGender(event.target.value as VoterInput["gender"])
                   }
                   disabled={isSaving}
                   className="w-full rounded-md border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-green-700 disabled:opacity-60"
                 >
                   {GENDER_OPTIONS.map((option) => (
-                    <option
-                      key={option}
-                      value={option}
-                    >
+                    <option key={option} value={option}>
                       {option}
                     </option>
                   ))}
@@ -1036,31 +959,21 @@ export default function VotersManager() {
                   id="voter-city"
                   required
                   value={location}
-                  onChange={(event) =>
-                    setLocation(event.target.value)
-                  }
+                  onChange={(event) => setLocation(event.target.value)}
                   disabled={isSaving}
                   className="w-full rounded-md border bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-green-700 disabled:opacity-60"
                 >
-                  <option value="">
-                    Select city
-                  </option>
+                  <option value="">Select city</option>
 
                   {CITY_OPTIONS.map((city) => (
-                    <option
-                      key={city}
-                      value={city}
-                    >
+                    <option key={city} value={city}>
                       {city}
                     </option>
                   ))}
 
-                  {location &&
-                    !CITY_OPTIONS.includes(location) && (
-                      <option value={location}>
-                        {location}
-                      </option>
-                    )}
+                  {location && !CITY_OPTIONS.includes(location) && (
+                    <option value={location}>{location}</option>
+                  )}
                 </select>
               </div>
 
@@ -1084,8 +997,8 @@ export default function VotersManager() {
                   {isSaving
                     ? "Saving..."
                     : editingVoter
-                      ? "Save Changes"
-                      : "Register Voter"}
+                    ? "Save Changes"
+                    : "Register Voter"}
                 </button>
               </div>
             </form>
@@ -1113,8 +1026,7 @@ export default function VotersManager() {
             </h2>
 
             <p className="mt-3 text-sm text-slate-600">
-              You are about to generate a
-              secure voting access code for:
+              You are about to generate a secure voting access code for:
             </p>
 
             <div className="mt-4 rounded-lg bg-slate-50 p-4">
@@ -1129,10 +1041,8 @@ export default function VotersManager() {
 
             <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
               <p className="text-sm text-amber-900">
-                <strong>Important:</strong>{" "}
-                The access code will be shown
-                only once. Copy it and deliver
-                it privately to the voter.
+                <strong>Important:</strong> The access code will be shown only
+                once. Copy it and deliver it privately to the voter.
               </p>
             </div>
 
@@ -1154,15 +1064,11 @@ export default function VotersManager() {
 
               <button
                 type="button"
-                onClick={() =>
-                  void handleGenerateCode()
-                }
+                onClick={() => void handleGenerateCode()}
                 disabled={isGenerating}
                 className="rounded-md bg-green-700 px-4 py-2 font-semibold text-white hover:bg-green-800 disabled:opacity-60"
               >
-                {isGenerating
-                  ? "Generating..."
-                  : "Confirm & Generate"}
+                {isGenerating ? "Generating..." : "Confirm & Generate"}
               </button>
             </div>
           </div>
@@ -1195,10 +1101,7 @@ export default function VotersManager() {
 
               <p className="mt-2 text-sm text-slate-600">
                 Access code generated for{" "}
-                <strong>
-                  {generatedCode.voterName}
-                </strong>
-                .
+                <strong>{generatedCode.voterName}</strong>.
               </p>
             </div>
 
@@ -1214,24 +1117,16 @@ export default function VotersManager() {
 
             <button
               type="button"
-              onClick={() =>
-                void handleCopyCode()
-              }
+              onClick={() => void handleCopyCode()}
               className="mt-4 w-full rounded-md bg-green-700 px-5 py-3 font-semibold text-white hover:bg-green-800"
             >
-              {codeCopied
-                ? "✓ Copied to Clipboard"
-                : "Copy Access Code"}
+              {codeCopied ? "✓ Copied to Clipboard" : "Copy Access Code"}
             </button>
 
             <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4">
               <p className="text-sm text-amber-900">
-                <strong>
-                  Save this code securely.
-                </strong>{" "}
-                It cannot be retrieved after
-                this window is closed.
-                Do not share it publicly.
+                <strong>Save this code securely.</strong> It cannot be retrieved
+                after this window is closed. Do not share it publicly.
               </p>
             </div>
 

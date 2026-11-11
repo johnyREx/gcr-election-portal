@@ -844,10 +844,24 @@ async function generateOfficialBulkBatch(
   }[];
 
   try {
-    codes = batch.map((voter) => ({
-      voterId: String(voter.id).trim(),
-      accessCode: generateAccessCode(voter.name),
-    }));
+    codes = batch.map((voter) => {
+      let accessCode: string;
+    
+      try {
+        accessCode = generateAccessCode(voter.name);
+      } catch (error) {
+        throw new Error(
+          `Invalid voter name for voter ID ${String(voter.id)}: ${
+            error instanceof Error ? error.message : "Unknown validation error"
+          }`
+        );
+      }
+    
+      return {
+        voterId: String(voter.id).trim(),
+        accessCode,
+      };
+    });
   } catch  (error) {
     return jsonResponse(
       {

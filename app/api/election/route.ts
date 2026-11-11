@@ -334,7 +334,7 @@ function buildPrefix(name: string): string {
     .split(/\s+/)
     .filter(Boolean);
 
-  if (parts.length < 2) {
+  if (parts.length === 0) {
     throw new Error("Voter name is required.");
   }
 

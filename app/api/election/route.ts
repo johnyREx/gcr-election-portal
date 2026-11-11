@@ -853,7 +853,9 @@ async function generateOfficialBulkBatch(
       {
         success: false,
         message:
-          "Unable to generate credentials for this batch.",
+          error instanceof Error
+            ? error.message
+            : "Unable to generate credentials for this batch.",
         code: "GENERATION_FAILED",
       },
       400

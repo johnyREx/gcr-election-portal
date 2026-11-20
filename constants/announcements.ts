@@ -1,23 +1,23 @@
 export const announcements = [
   {
     id: 1,
-    title: "Approved Candidates Published",
-    date: "30 October 2026",
+    title: "ACGC General Elections 2026 — Election Day",
+    date: "22 November 2026",
     description:
-      "The candidates approved to contest in the ACGC General Elections 2026 are now available on the election portal. Members are encouraged to review the candidate profiles and submitted credentials.",
+      "Today marks Election Day for the ACGC General Elections 2026. Eligible registered voters are encouraged to participate through the official election portal once voting is authorized by the Electoral Commission.",
   },
   {
     id: 2,
-    title: "Official Campaign Period Underway",
-    date: "30 October 2026",
+    title: "Official Voting Portal & Voter Information",
+    date: "22 November 2026",
     description:
-      "The official campaign period for the ACGC General Elections 2026 is underway and will continue until 15 November 2026.",
+      "Registered voters can access the official voting portal using their assigned voting credentials. Voting availability and access are controlled by the Electoral Commission. Each eligible voter may cast one ballot.",
   },
   {
     id: 3,
-    title: "Election Day — 22 November 2026",
-    date: "22 November 2026",
+    title: "Approved Candidates & Electoral Contests",
+    date: "30 October 2026",
     description:
-      "The ACGC General Elections will take place on 22 November 2026. Eligible voters are encouraged to stay informed and prepare to participate when the polls officially open.",
+      "The Electoral Commission has published the approved candidates for the ACGC General Elections 2026. Voters are encouraged to review candidate profiles and familiarize themselves with the electoral contests before casting their ballots.",
   },
 ];

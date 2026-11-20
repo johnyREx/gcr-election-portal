@@ -8,7 +8,7 @@ export default function CandidatePreview() {
   const featuredCandidates = candidates
     .filter(
       (candidate) =>
-        candidate.slug !== "nkum-jibril-koho"
+        candidate.slug !== "nkum-jibril-kojo"
     )
     .slice(0, 4);
 

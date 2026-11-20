@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GCR Election Portal",
+  title: "ACGC General Elections 2026",
   description:
     "Official Election Platform of the Ghanaian Community in Russia",
 };
@@ -31,14 +31,32 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
-        <Header />
+      <body className="relative flex min-h-screen flex-col overflow-x-hidden bg-white">
 
-        <main className="flex-1">
+        {/* Global ACGC Background Watermark */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed inset-0 z-0 bg-[url('/images/acgc-watermark.png')] bg-center bg-no-repeat opacity-[0.035]"
+          style={{
+            backgroundSize: "min(75vw, 650px)",
+          }}
+        />
+
+        {/* Website Header */}
+        <div className="relative z-10">
+          <Header />
+        </div>
+
+        {/* Main Website Content */}
+        <main className="relative z-10 flex-1">
           {children}
         </main>
 
-        <Footer />
+        {/* Website Footer */}
+        <div className="relative z-10">
+          <Footer />
+        </div>
+
       </body>
     </html>
   );

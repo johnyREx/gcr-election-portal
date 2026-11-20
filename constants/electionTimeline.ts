@@ -36,16 +36,16 @@ export const electionTimeline = [
     title: "Official Campaign Period",
     date: "30 October – 15 November 2026",
     description:
-      "Approved candidates may officially campaign and engage members of the Ghanaian community ahead of Election Day.",
-    status: "current",
+      "Approved candidates officially campaigned and engaged members of the Ghanaian community ahead of Election Day.",
+    status: "completed",
   },
   {
     id: 6,
     title: "Election Day",
     date: "22 November 2026",
     description:
-      "Eligible registered voters will cast their ballots in the ACGC General Elections 2026.",
-    status: "upcoming",
+      "Today marks Election Day for the ACGC General Elections 2026. Eligible registered voters are encouraged to participate through the official voting portal when voting is authorized by the Electoral Commission.",
+    status: "current",
   },
   {
     id: 7,

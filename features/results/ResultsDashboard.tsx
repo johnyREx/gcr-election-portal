@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+
 import {
   Award,
   CalendarDays,
@@ -25,108 +26,252 @@ import {
   type ResultsSummary,
 } from "@/services/electionService";
 
+// =====================================================
+// TYPES
+// =====================================================
+
 interface ResultsDashboardProps {
   mode?: "public" | "admin";
 }
 
+interface DeclaredExecutive {
+  position: string;
+  image: string;
+  winner: ResultCandidate;
+  profile?: ElectionCandidate;
+}
+
 // =====================================================
-// OFFICIAL DECLARATION CONFIGURATION
+// DECLARATION CONFIGURATION
 // =====================================================
 
 /**
- * This reflects the Electoral Commission's confirmed
- * declaration of the six elected positions.
+ * These are the six candidates declared elected
+ * by the Electoral Commission.
  *
- * IMPORTANT:
- * This is a frontend presentation configuration.
- * It does not modify the backend election records.
+ * The declaration remains subject to petitions.
  *
- * Do not change this to FINAL automatically.
+ * This configuration affects presentation only.
+ * It does not modify backend election records.
  */
+
 const DECLARATION_STATUS = "DECLARED" as const;
 
 const ELECTION_DATE = "22 November 2026";
 
-const PETITION_DEADLINE =
-  "25 November 2026 at 7:30 PM (Moscow time)";
-
 const PETITION_START =
   "22 November 2026 at 7:30 PM (Moscow time)";
 
-const DECLARED_POSITIONS = [
-  "President",
-  "General Secretary",
-  "Financial Secretary",
-  "Organizing Secretary",
-  "Public Relations Officer",
-  "Women's Commissioner",
-] as const;
+const PETITION_DEADLINE =
+  "25 November 2026 at 7:30 PM (Moscow time)";
+
+const PRESIDENTIAL_RUNNING_MATE = "Nkum Jibril Kojo";
 
 /**
- * Names are used to identify the Electoral Commission's
- * declared candidates within the existing results.
+ * Officially declared executives.
  *
- * Votes and percentages are NEVER hardcoded.
- * They always come from getResults().
+ * Images are stored in:
+ * public/candidates/
+ *
+ * Vote counts and percentages are NOT hardcoded.
  */
-const DECLARED_WINNERS: Record<string, string> = {
-  President: "Wepari Ebenezer Yaw",
-  "General Secretary": "Fosu Enoch Yaw",
-  "Financial Secretary": "Japheth Bondzie Appah",
-  "Organizing Secretary": "Kafui Kwaku Feyi",
-  "Public Relations Officer": "Amoah Winfred Kofi",
-  "Women's Commissioner": "Hasia Mwinebang Seidu",
-};
 
-const PRESIDENTIAL_RUNNING_MATE = "Jibrill";
+const DECLARED_EXECUTIVES = [
+  {
+    position: "President",
+    name: "Wepari Ebenezer Yaw",
+    image: "/candidates/wepari-jibril.png",
+  },
+  {
+    position: "General Secretary",
+    name: "Fosu Enoch Yaw",
+    image: "/candidates/enoch-fosu.jpg",
+  },
+  {
+    position: "Financial Secretary",
+    name: "Japheth Bondzie Appah",
+    image: "/candidates/japhet-appah.png",
+  },
+  {
+    position: "Organizing Secretary",
+    name: "Kafui Kwaku Feyi",
+    image: "/candidates/kafui-feyi.jpg",
+  },
+  {
+    position: "Public Relations Officer",
+    name: "Amoah Winfred Kofi",
+    image: "/candidates/winfred-amoah.jpeg",
+  },
+  {
+    position: "Women's Commissioner",
+    name: "Hasia Mwinebang Seidu",
+    image: "/candidates/hasia-seidu.jpeg",
+  },
+] as const;
 
 // =====================================================
-// HELPERS
+// NORMALIZATION HELPERS
 // =====================================================
 
-function normalize(value: string) {
-  return value
+function normalize(value: string): string {
+  return String(value || "")
+    .normalize("NFKD")
     .toLowerCase()
-    .replace(/[^a-z0-9]/g, "")
-    .trim();
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
 }
 
-function formatPercentage(value: number) {
+/**
+ * Handle different position labels.
+ *
+ * Public Relations Officer (PRO)
+ * Public Relations Officer
+ * PRO
+ *
+ * Women's Commissioner
+ * Women’s Commissioner
+ * Womens Commissioner
+ */
+
+function normalizePosition(value: string): string {
+  const normalized = normalize(value);
+
+  if (
+    normalized === "pro" ||
+    normalized === "publicrelationsofficer" ||
+    normalized === "publicrelationsofficerpro"
+  ) {
+    return "publicrelationsofficer";
+  }
+
+  if (
+    normalized === "womenscommissioner" ||
+    normalized === "womancommissioner"
+  ) {
+    return "womenscommissioner";
+  }
+
+  return normalized;
+}
+
+function positionsMatch(
+  first: string,
+  second: string
+): boolean {
+  return (
+    normalizePosition(first) ===
+    normalizePosition(second)
+  );
+}
+
+function namesMatch(
+  first: string,
+  second: string
+): boolean {
+  return normalize(first) === normalize(second);
+}
+
+function formatPercentage(value: number): string {
   return Number(value || 0).toFixed(2);
 }
+
+// =====================================================
+// DECLARED WINNER HELPERS
+// =====================================================
+
+function findDeclaration(position: string) {
+  return DECLARED_EXECUTIVES.find((executive) =>
+    positionsMatch(executive.position, position)
+  );
+}
+
+/**
+ * Match the Electoral Commission's declared
+ * candidate against the actual election results.
+ *
+ * Never invent vote counts or winners.
+ */
 
 function findDeclaredWinner(
   result: PositionResult
 ): ResultCandidate | null {
-  const declaredName =
-    DECLARED_WINNERS[result.position];
+  const declaration = findDeclaration(result.position);
 
-  if (!declaredName) {
+  if (!declaration) {
     return null;
   }
 
   return (
-    result.candidates.find(
-      (candidate) =>
-        normalize(candidate.name) ===
-        normalize(declaredName)
+    result.candidates.find((candidate) =>
+      namesMatch(candidate.name, declaration.name)
     ) || null
   );
 }
 
+/**
+ * Match candidate profiles using ID first,
+ * followed by name and position.
+ */
+
 function findCandidateProfile(
   candidate: ResultCandidate,
+  position: string,
   profiles: ElectionCandidate[]
-) {
-  return profiles.find(
+): ElectionCandidate | undefined {
+  const byId = profiles.find(
     (profile) =>
       String(profile.id) === String(candidate.id)
   );
+
+  if (byId) {
+    return byId;
+  }
+
+  return profiles.find(
+    (profile) =>
+      namesMatch(profile.name, candidate.name) &&
+      positionsMatch(profile.position, position)
+  );
 }
+
+/**
+ * Resolve a candidate photograph.
+ *
+ * Local image takes priority.
+ * Backend image is the fallback.
+ */
+
+function getCandidateImage(
+  candidate: ResultCandidate,
+  position: string,
+  profiles: ElectionCandidate[]
+): string {
+  const declaration = findDeclaration(position);
+
+  const isDeclaredCandidate =
+    declaration &&
+    namesMatch(candidate.name, declaration.name);
+
+  if (isDeclaredCandidate && declaration) {
+    return declaration.image;
+  }
+
+  const profile = findCandidateProfile(
+    candidate,
+    position,
+    profiles
+  );
+
+  return profile?.image || candidate.image || "";
+}
+
+// =====================================================
+// BACKEND DECISION HELPERS
+// =====================================================
 
 function getDecisionStyles(
   status: PositionResult["status"]
-) {
+): string {
   switch (status) {
     case "WINNER_DECLARED":
       return "border-green-200 bg-green-50 text-green-800";
@@ -144,7 +289,7 @@ function getDecisionStyles(
 
 function getDecisionTitle(
   status: PositionResult["status"]
-) {
+): string {
   switch (status) {
     case "WINNER_DECLARED":
       return "Winner Declared";
@@ -167,7 +312,7 @@ function getDecisionTitle(
 }
 
 // =====================================================
-// COMPONENT
+// MAIN COMPONENT
 // =====================================================
 
 export default function ResultsDashboard({
@@ -193,6 +338,10 @@ export default function ResultsDashboard({
   const [isLoading, setIsLoading] =
     useState(true);
 
+  // =====================================================
+  // LOAD ELECTION DATA
+  // =====================================================
+
   useEffect(() => {
     let isMounted = true;
 
@@ -200,13 +349,11 @@ export default function ResultsDashboard({
       try {
         setError("");
 
-        const electionResponse =
-          await getElection();
+        const electionResponse = await getElection();
 
         if (!isMounted) return;
 
-        const election =
-          electionResponse.election;
+        const election = electionResponse.election;
 
         const canViewResults =
           mode === "admin" ||
@@ -214,30 +361,26 @@ export default function ResultsDashboard({
 
         setResultsVisible(canViewResults);
 
-        setElectionStatus(
-          election?.status || ""
-        );
+        setElectionStatus(election?.status || "");
 
-        if (!canViewResults) return;
+        if (!canViewResults) {
+          return;
+        }
 
-        const resultsResponse =
-          await getResults();
+        const resultsResponse = await getResults();
 
         if (!isMounted) return;
 
         setSummary(resultsResponse.summary);
 
-        setResults(
-          resultsResponse.results || []
-        );
+        setResults(resultsResponse.results || []);
 
         /**
-         * Candidate profiles are used for photographs
-         * and running-mate information only.
-         *
-         * Failure to load profiles must not prevent
+         * Candidate profiles are optional.
+         * Their failure must not prevent
          * election results from displaying.
          */
+
         try {
           const candidatesResponse =
             await getCandidates();
@@ -276,7 +419,7 @@ export default function ResultsDashboard({
   }, [mode]);
 
   // =====================================================
-  // LOADING
+  // LOADING STATE
   // =====================================================
 
   if (isLoading) {
@@ -296,7 +439,7 @@ export default function ResultsDashboard({
   }
 
   // =====================================================
-  // ERROR
+  // ERROR STATE
   // =====================================================
 
   if (error) {
@@ -342,7 +485,10 @@ export default function ResultsDashboard({
 
             {electionStatus && (
               <p className="mt-5 text-sm text-slate-500">
-                Election status: {electionStatus}
+                Election status:{" "}
+                <span className="font-semibold">
+                  {electionStatus}
+                </span>
               </p>
             )}
           </div>
@@ -352,45 +498,57 @@ export default function ResultsDashboard({
   }
 
   // =====================================================
-  // DECLARED WINNERS
+  // MATCH DECLARED EXECUTIVES
   // =====================================================
 
-  const declaredWinners = DECLARED_POSITIONS.map(
-    (position) => {
-      const result = results.find(
-        (item) =>
-          normalize(item.position) ===
-          normalize(position)
+  const declaredWinners: DeclaredExecutive[] =
+    DECLARED_EXECUTIVES.flatMap((declaration) => {
+      const result = results.find((item) =>
+        positionsMatch(
+          item.position,
+          declaration.position
+        )
       );
 
-      if (!result) return null;
+      if (!result) {
+        return [];
+      }
 
-      const winner = findDeclaredWinner(result);
+      const winner = result.candidates.find(
+        (candidate) =>
+          namesMatch(candidate.name, declaration.name)
+      );
 
-      if (!winner) return null;
+      if (!winner) {
+        return [];
+      }
 
       const profile = findCandidateProfile(
         winner,
+        result.position,
         candidateProfiles
       );
 
-      return {
-        position,
-        winner,
-        profile,
-        result,
-      };
-    }
-  ).filter(
-    (
-      item
-    ): item is NonNullable<typeof item> =>
-      item !== null
-  );
+      return [
+        {
+          position: declaration.position,
+          image: declaration.image,
+          winner,
+          profile,
+        },
+      ];
+    });
 
-  const allDeclarationsMatched =
-    declaredWinners.length ===
-    DECLARED_POSITIONS.length;
+  const missingDeclarations =
+    DECLARED_EXECUTIVES.filter(
+      (declaration) =>
+        !declaredWinners.some((executive) =>
+          positionsMatch(
+            executive.position,
+            declaration.position
+          )
+        )
+    );
 
   // =====================================================
   // MAIN PAGE
@@ -400,7 +558,7 @@ export default function ResultsDashboard({
     <Section className="bg-slate-50">
       <Container>
         {/* ==========================================
-            OFFICIAL DECLARATION HERO
+            DECLARATION HERO
         ========================================== */}
 
         <div className="relative mb-12 overflow-hidden rounded-3xl bg-slate-950 px-6 py-12 text-white shadow-xl sm:px-10 lg:px-14">
@@ -426,8 +584,9 @@ export default function ResultsDashboard({
 
             <p className="mt-5 max-w-3xl text-base leading-relaxed text-slate-300 sm:text-lg">
               The Electoral Commission has declared
-              the candidates elected to the six
-              contested executive positions.
+              candidates elected to the six executive
+              positions following the ACGC General
+              Elections held on 22 November 2026.
               The declaration remains subject to
               the prescribed 72-hour petition period.
             </p>
@@ -484,8 +643,8 @@ export default function ResultsDashboard({
               <p className="mt-4 text-sm leading-relaxed text-amber-800">
                 Final certification will follow
                 the conclusion of the petition
-                process and the resolution of
-                any admissible petitions.
+                process and resolution of any
+                admissible petitions.
               </p>
             </div>
           </div>
@@ -570,29 +729,45 @@ export default function ResultsDashboard({
           </p>
         </div>
 
-        {!allDeclarationsMatched && (
+        {/* ==========================================
+            MATCHING WARNING
+        ========================================== */}
+
+        {missingDeclarations.length > 0 && (
           <div className="mb-8 rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
-            Some declared candidate records could
-            not be matched to the published results.
-            Please verify the candidate names and
-            positions before relying on this display.
+            <p className="font-bold">
+              Some declared candidates could not
+              be matched to the published results.
+            </p>
+
+            <ul className="mt-3 list-disc space-y-1 pl-5">
+              {missingDeclarations.map((declaration) => (
+                <li key={declaration.position}>
+                  {declaration.position} — {declaration.name}
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 
+        {/* ==========================================
+            EXECUTIVE CARDS
+        ========================================== */}
+
         <div className="mb-20 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
           {declaredWinners.map(
-            ({ position, winner, profile }) => {
-              const isPresident =
-                normalize(position) ===
-                normalize("President");
+            ({ position, winner, profile, image }) => {
+              const isPresident = positionsMatch(
+                position,
+                "President"
+              );
 
               const runningMate =
                 profile?.runningMate?.trim() ||
                 PRESIDENTIAL_RUNNING_MATE;
 
-              const image =
-                profile?.image ||
-                winner.image;
+              const candidateImage =
+                image || profile?.image || winner.image;
 
               return (
                 <div
@@ -613,15 +788,25 @@ export default function ResultsDashboard({
                       />
                     </div>
 
+                    {/* Candidate photograph */}
+
                     <div className="mb-5 flex justify-center">
-                      {image ? (
+                      {candidateImage ? (
                         <img
-                          src={image}
-                          alt={winner.name}
-                          className="h-28 w-28 rounded-full border-4 border-green-100 object-cover shadow-md"
+                          src={candidateImage}
+                          alt={
+                            isPresident
+                              ? `${winner.name} and ${runningMate}`
+                              : winner.name
+                          }
+                          className={`rounded-full border-4 border-green-100 object-cover shadow-md ${
+                            isPresident
+                              ? "h-36 w-36"
+                              : "h-32 w-32"
+                          }`}
                         />
                       ) : (
-                        <div className="flex h-28 w-28 items-center justify-center rounded-full bg-green-100 text-4xl font-black text-green-800">
+                        <div className="flex h-32 w-32 items-center justify-center rounded-full bg-green-100 text-4xl font-black text-green-800">
                           {winner.name.charAt(0)}
                         </div>
                       )}
@@ -637,6 +822,8 @@ export default function ResultsDashboard({
                           {winner.location}
                         </p>
                       )}
+
+                      {/* Presidential running mate */}
 
                       {isPresident && (
                         <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
@@ -655,6 +842,8 @@ export default function ResultsDashboard({
                         Declared Elected
                       </div>
                     </div>
+
+                    {/* Vote statistics */}
 
                     <div className="mt-7 grid grid-cols-2 divide-x divide-slate-200 rounded-2xl bg-slate-50 py-4 text-center">
                       <div>
@@ -719,146 +908,164 @@ export default function ResultsDashboard({
           </div>
         ) : (
           <div className="space-y-8">
-            {results.map((result) => (
-              <div
-                key={result.position}
-                className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
-              >
-                <div className="border-b border-slate-100 p-6 sm:p-8">
-                  <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
-                    <div>
-                      <h3 className="text-2xl font-black text-slate-900">
-                        {result.position}
-                      </h3>
+            {results.map((result) => {
+              const declaredWinner =
+                findDeclaredWinner(result);
 
-                      <p className="mt-2 text-sm text-slate-500">
-                        {result.totalValidVotes} valid votes
-                      </p>
+              return (
+                <div
+                  key={result.position}
+                  className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+                >
+                  <div className="border-b border-slate-100 p-6 sm:p-8">
+                    <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
+                      <div>
+                        <h3 className="text-2xl font-black text-slate-900">
+                          {result.position}
+                        </h3>
+
+                        <p className="mt-2 text-sm text-slate-500">
+                          {result.totalValidVotes} valid votes
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 px-5 py-3">
+                        <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                          Winning Threshold
+                        </p>
+
+                        <p className="mt-1 text-2xl font-black text-slate-900">
+                          {result.winningThreshold}
+                        </p>
+
+                        <p className="text-xs text-slate-500">
+                          {result.majorityRule}
+                        </p>
+                      </div>
                     </div>
 
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-5 py-3">
-                      <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                        Winning Threshold
-                      </p>
-
-                      <p className="mt-1 text-2xl font-black text-slate-900">
-                        {result.winningThreshold}
-                      </p>
-
-                      <p className="text-xs text-slate-500">
-                        {result.majorityRule}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div
-                    className={`mt-6 rounded-xl border p-4 ${getDecisionStyles(
-                      result.status
-                    )}`}
-                  >
-                    <p className="font-bold">
-                      {getDecisionTitle(
+                    <div
+                      className={`mt-6 rounded-xl border p-4 ${getDecisionStyles(
                         result.status
-                      )}
-                    </p>
+                      )}`}
+                    >
+                      <p className="font-bold">
+                        {getDecisionTitle(result.status)}
+                      </p>
 
-                    <p className="mt-1 text-sm">
-                      {result.message}
-                    </p>
+                      <p className="mt-1 text-sm">
+                        {result.message}
+                      </p>
+                    </div>
                   </div>
-                </div>
 
-                <div className="space-y-4 p-6 sm:p-8">
-                  {result.candidates.map(
-                    (candidate) => {
-                      const declaredWinner =
-                        findDeclaredWinner(result);
+                  <div className="space-y-4 p-6 sm:p-8">
+                    {result.candidates.length === 0 ? (
+                      <p className="text-slate-500">
+                        No candidates registered
+                        for this position.
+                      </p>
+                    ) : (
+                      result.candidates.map((candidate) => {
+                        const isDeclared =
+                          Boolean(
+                            declaredWinner &&
+                              String(declaredWinner.id) ===
+                                String(candidate.id)
+                          );
 
-                      const isDeclared =
-                        declaredWinner &&
-                        String(declaredWinner.id) ===
-                          String(candidate.id);
+                        const candidateImage =
+                          getCandidateImage(
+                            candidate,
+                            result.position,
+                            candidateProfiles
+                          );
 
-                      return (
-                        <div
-                          key={String(candidate.id)}
-                          className={`rounded-xl border p-5 ${
-                            isDeclared
-                              ? "border-green-300 bg-green-50"
-                              : "border-slate-200 bg-white"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-4">
-                            <div className="flex min-w-0 items-center gap-3">
-                              {candidate.image && (
-                                <img
-                                  src={candidate.image}
-                                  alt=""
-                                  className="h-12 w-12 rounded-full object-cover"
-                                />
-                              )}
+                        return (
+                          <div
+                            key={String(candidate.id)}
+                            className={`rounded-xl border p-5 ${
+                              isDeclared
+                                ? "border-green-300 bg-green-50"
+                                : "border-slate-200 bg-white"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-4">
+                              <div className="flex min-w-0 items-center gap-3">
+                                {candidateImage ? (
+                                  <img
+                                    src={candidateImage}
+                                    alt={candidate.name}
+                                    className="h-12 w-12 rounded-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 font-bold text-green-800">
+                                    {candidate.name.charAt(0)}
+                                  </div>
+                                )}
 
-                              <div>
-                                <p className="font-bold text-slate-900">
-                                  {candidate.name}
+                                <div className="min-w-0">
+                                  <p className="font-bold text-slate-900">
+                                    {candidate.name}
+                                  </p>
+
+                                  {candidate.location && (
+                                    <p className="text-sm text-slate-500">
+                                      {candidate.location}
+                                    </p>
+                                  )}
+
+                                  {isDeclared && (
+                                    <span className="mt-2 inline-flex rounded-full bg-green-700 px-2.5 py-1 text-xs font-bold text-white">
+                                      Declared Elected
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="shrink-0 text-right">
+                                <p className="text-xl font-black text-slate-900">
+                                  {candidate.votes}
                                 </p>
 
-                                {candidate.location && (
-                                  <p className="text-sm text-slate-500">
-                                    {candidate.location}
-                                  </p>
-                                )}
-
-                                {isDeclared && (
-                                  <span className="mt-2 inline-flex rounded-full bg-green-700 px-2.5 py-1 text-xs font-bold text-white">
-                                    Declared Elected
-                                  </span>
-                                )}
+                                <p className="text-sm text-slate-500">
+                                  {formatPercentage(
+                                    candidate.percentage
+                                  )}
+                                  %
+                                </p>
                               </div>
                             </div>
 
-                            <div className="shrink-0 text-right">
-                              <p className="text-xl font-black text-slate-900">
-                                {candidate.votes}
-                              </p>
-
-                              <p className="text-sm text-slate-500">
-                                {formatPercentage(
-                                  candidate.percentage
-                                )}
-                                %
-                              </p>
+                            <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-slate-200">
+                              <div
+                                className="h-full rounded-full bg-green-700"
+                                style={{
+                                  width: `${Math.max(
+                                    0,
+                                    Math.min(
+                                      Number(
+                                        candidate.percentage
+                                      ) || 0,
+                                      100
+                                    )
+                                  )}%`,
+                                }}
+                              />
                             </div>
                           </div>
-
-                          <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-slate-200">
-                            <div
-                              className="h-full rounded-full bg-green-700"
-                              style={{
-                                width: `${Math.max(
-                                  0,
-                                  Math.min(
-                                    Number(
-                                      candidate.percentage
-                                    ) || 0,
-                                    100
-                                  )
-                                )}%`,
-                              }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    }
-                  )}
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
         {/* ==========================================
-            DECLARATION FOOTNOTE
+            ELECTORAL COMMISSION NOTICE
         ========================================== */}
 
         <div className="mt-12 rounded-2xl border border-slate-200 bg-white p-6 text-sm leading-relaxed text-slate-600 sm:p-8">

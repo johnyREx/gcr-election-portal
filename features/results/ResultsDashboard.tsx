@@ -6,7 +6,6 @@ import {
   Award,
   CalendarDays,
   CheckCircle2,
-  Clock3,
   FileText,
   ShieldCheck,
   Users,
@@ -34,7 +33,7 @@ interface ResultsDashboardProps {
   mode?: "public" | "admin";
 }
 
-interface DeclaredExecutive {
+interface CertifiedExecutive {
   position: string;
   image: string;
   winner: ResultCandidate;
@@ -42,22 +41,36 @@ interface DeclaredExecutive {
 }
 
 // =====================================================
-// DECLARATION CONFIGURATION
+// OFFICIAL CERTIFICATION CONFIGURATION
 // =====================================================
 
 /**
- * These are the six candidates declared elected
- * by the Electoral Commission.
+ * ACGC GENERAL ELECTIONS 2026
  *
- * The declaration remains subject to petitions.
+ * Election Date:
+ * 22 November 2026
  *
- * This configuration affects presentation only.
- * It does not modify backend election records.
+ * Petition Period:
+ * 22 November 2026, 7:30 PM Moscow Time
+ * through
+ * 25 November 2026, 7:30 PM Moscow Time
+ *
+ * No petitions were received.
+ *
+ * The Electoral Commission has approved
+ * final certification of the election results.
+ *
+ * IMPORTANT:
+ * This configuration changes presentation only.
+ * It does not modify election records, ballots,
+ * vote counts, or backend data.
  */
 
-const DECLARATION_STATUS = "DECLARED" as const;
+const CERTIFICATION_STATUS = "CERTIFIED" as const;
 
 const ELECTION_DATE = "22 November 2026";
+
+const CERTIFICATION_DATE = "25 November 2026";
 
 const PETITION_START =
   "22 November 2026 at 7:30 PM (Moscow time)";
@@ -67,16 +80,21 @@ const PETITION_DEADLINE =
 
 const PRESIDENTIAL_RUNNING_MATE = "Nkum Jibril Kojo";
 
+// =====================================================
+// OFFICIALLY CERTIFIED EXECUTIVES
+// =====================================================
+
 /**
- * Officially declared executives.
+ * These are the six candidates whose election
+ * has been certified by the Electoral Commission.
  *
- * Images are stored in:
- * public/candidates/
+ * Their vote counts and percentages are always
+ * retrieved from the election results API.
  *
- * Vote counts and percentages are NOT hardcoded.
+ * Images are stored in public/candidates/.
  */
 
-const DECLARED_EXECUTIVES = [
+const CERTIFIED_EXECUTIVES = [
   {
     position: "President",
     name: "Wepari Ebenezer Yaw",
@@ -113,6 +131,18 @@ const DECLARED_EXECUTIVES = [
 // NORMALIZATION HELPERS
 // =====================================================
 
+/**
+ * Normalize names and position labels.
+ *
+ * Handles:
+ * - Uppercase/lowercase
+ * - Extra spaces
+ * - Hyphens
+ * - Curly apostrophes
+ * - Straight apostrophes
+ * - Punctuation
+ */
+
 function normalize(value: string): string {
   return String(value || "")
     .normalize("NFKD")
@@ -123,6 +153,8 @@ function normalize(value: string): string {
 
 /**
  * Handle different position labels.
+ *
+ * Examples:
  *
  * Public Relations Officer (PRO)
  * Public Relations Officer
@@ -176,34 +208,34 @@ function formatPercentage(value: number): string {
 }
 
 // =====================================================
-// DECLARED WINNER HELPERS
+// CERTIFIED WINNER HELPERS
 // =====================================================
 
-function findDeclaration(position: string) {
-  return DECLARED_EXECUTIVES.find((executive) =>
+function findCertification(position: string) {
+  return CERTIFIED_EXECUTIVES.find((executive) =>
     positionsMatch(executive.position, position)
   );
 }
 
 /**
- * Match the Electoral Commission's declared
- * candidate against the actual election results.
+ * Match the officially certified candidate
+ * against the actual backend election results.
  *
- * Never invent vote counts or winners.
+ * No vote totals or percentages are invented.
  */
 
-function findDeclaredWinner(
+function findCertifiedWinner(
   result: PositionResult
 ): ResultCandidate | null {
-  const declaration = findDeclaration(result.position);
+  const certification = findCertification(result.position);
 
-  if (!declaration) {
+  if (!certification) {
     return null;
   }
 
   return (
     result.candidates.find((candidate) =>
-      namesMatch(candidate.name, declaration.name)
+      namesMatch(candidate.name, certification.name)
     ) || null
   );
 }
@@ -237,8 +269,8 @@ function findCandidateProfile(
 /**
  * Resolve a candidate photograph.
  *
- * Local image takes priority.
- * Backend image is the fallback.
+ * Official local images take priority.
+ * Backend images are used as fallbacks.
  */
 
 function getCandidateImage(
@@ -246,14 +278,14 @@ function getCandidateImage(
   position: string,
   profiles: ElectionCandidate[]
 ): string {
-  const declaration = findDeclaration(position);
+  const certification = findCertification(position);
 
-  const isDeclaredCandidate =
-    declaration &&
-    namesMatch(candidate.name, declaration.name);
+  const isCertifiedCandidate =
+    certification &&
+    namesMatch(candidate.name, certification.name);
 
-  if (isDeclaredCandidate && declaration) {
-    return declaration.image;
+  if (isCertifiedCandidate && certification) {
+    return certification.image;
   }
 
   const profile = findCandidateProfile(
@@ -268,6 +300,17 @@ function getCandidateImage(
 // =====================================================
 // BACKEND DECISION HELPERS
 // =====================================================
+
+/**
+ * Original automated election decisions
+ * remain available for transparency.
+ *
+ * These historical messages may still
+ * refer to provisional results.
+ *
+ * They do not override the subsequent
+ * Electoral Commission certification.
+ */
 
 function getDecisionStyles(
   status: PositionResult["status"]
@@ -377,6 +420,7 @@ export default function ResultsDashboard({
 
         /**
          * Candidate profiles are optional.
+         *
          * Their failure must not prevent
          * election results from displaying.
          */
@@ -498,15 +542,15 @@ export default function ResultsDashboard({
   }
 
   // =====================================================
-  // MATCH DECLARED EXECUTIVES
+  // MATCH CERTIFIED EXECUTIVES
   // =====================================================
 
-  const declaredWinners: DeclaredExecutive[] =
-    DECLARED_EXECUTIVES.flatMap((declaration) => {
+  const certifiedWinners: CertifiedExecutive[] =
+    CERTIFIED_EXECUTIVES.flatMap((certification) => {
       const result = results.find((item) =>
         positionsMatch(
           item.position,
-          declaration.position
+          certification.position
         )
       );
 
@@ -516,7 +560,7 @@ export default function ResultsDashboard({
 
       const winner = result.candidates.find(
         (candidate) =>
-          namesMatch(candidate.name, declaration.name)
+          namesMatch(candidate.name, certification.name)
       );
 
       if (!winner) {
@@ -531,21 +575,21 @@ export default function ResultsDashboard({
 
       return [
         {
-          position: declaration.position,
-          image: declaration.image,
+          position: certification.position,
+          image: certification.image,
           winner,
           profile,
         },
       ];
     });
 
-  const missingDeclarations =
-    DECLARED_EXECUTIVES.filter(
-      (declaration) =>
-        !declaredWinners.some((executive) =>
+  const missingCertifications =
+    CERTIFIED_EXECUTIVES.filter(
+      (certification) =>
+        !certifiedWinners.some((executive) =>
           positionsMatch(
             executive.position,
-            declaration.position
+            certification.position
           )
         )
     );
@@ -558,7 +602,7 @@ export default function ResultsDashboard({
     <Section className="bg-slate-50">
       <Container>
         {/* ==========================================
-            DECLARATION HERO
+            OFFICIAL CERTIFICATION HERO
         ========================================== */}
 
         <div className="relative mb-12 overflow-hidden rounded-3xl bg-slate-950 px-6 py-12 text-white shadow-xl sm:px-10 lg:px-14">
@@ -571,7 +615,7 @@ export default function ResultsDashboard({
           <div className="relative z-10">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-green-500/30 bg-green-500/10 px-4 py-2 text-xs font-bold uppercase tracking-widest text-green-300">
               <ShieldCheck size={16} />
-              Electoral Commission Declaration
+              Electoral Commission Certification
             </div>
 
             <p className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-400">
@@ -579,27 +623,31 @@ export default function ResultsDashboard({
             </p>
 
             <h1 className="mt-4 max-w-4xl text-3xl font-black tracking-tight sm:text-4xl lg:text-5xl">
-              Declared Election Results
+              Official Certified Election Results
             </h1>
 
             <p className="mt-5 max-w-3xl text-base leading-relaxed text-slate-300 sm:text-lg">
-              The Electoral Commission has declared
-              candidates elected to the six executive
-              positions following the ACGC General
-              Elections held on 22 November 2026.
-              The declaration remains subject to
-              the prescribed 72-hour petition period.
+              The ACGC Electoral Commission has
+              formally certified the results of
+              the General Elections held on
+              22 November 2026.
+              Following the conclusion of the
+              prescribed 72-hour petition period,
+              during which no petitions were received,
+              the Commission approved the final
+              certification of all six executive
+              positions.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
               <span className="inline-flex items-center gap-2 rounded-full bg-green-600 px-4 py-2 text-sm font-bold text-white">
                 <CheckCircle2 size={17} />
-                Winners Declared
+                Results Officially Certified
               </span>
 
-              <span className="inline-flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-400/10 px-4 py-2 text-sm font-semibold text-amber-200">
-                <Clock3 size={17} />
-                Subject to Petitions
+              <span className="inline-flex items-center gap-2 rounded-full border border-green-400/40 bg-green-400/10 px-4 py-2 text-sm font-semibold text-green-200">
+                <ShieldCheck size={17} />
+                Final Results
               </span>
             </div>
 
@@ -607,44 +655,47 @@ export default function ResultsDashboard({
               <CalendarDays size={17} />
               Election held on {ELECTION_DATE}
             </div>
+
+            <p className="mt-3 text-sm text-slate-400">
+              Certified by the Electoral Commission
+              on {CERTIFICATION_DATE}.
+            </p>
           </div>
         </div>
 
         {/* ==========================================
-            PETITION NOTICE
+            PETITION PERIOD CONCLUDED
         ========================================== */}
 
-        <div className="mb-14 rounded-2xl border border-amber-200 bg-amber-50 p-6 sm:p-8">
+        <div className="mb-14 rounded-2xl border border-green-200 bg-green-50 p-6 sm:p-8">
           <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
-              <Clock3 size={24} />
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-green-100 text-green-700">
+              <CheckCircle2 size={24} />
             </div>
 
             <div>
-              <h2 className="text-xl font-bold text-amber-950">
-                72-Hour Petition Period
+              <h2 className="text-xl font-bold text-green-950">
+                Petition Period Successfully Concluded
               </h2>
 
-              <p className="mt-3 leading-relaxed text-amber-900">
-                The petition period commenced upon
-                publication of the provisional
-                election results on{" "}
-                <strong>{PETITION_START}</strong>.
+              <p className="mt-3 leading-relaxed text-green-900">
+                The prescribed 72-hour petition period
+                commenced on{" "}
+                <strong>{PETITION_START}</strong>
+                {" "}and concluded on{" "}
+                <strong>{PETITION_DEADLINE}</strong>.
               </p>
 
-              <p className="mt-3 text-amber-900">
-                Petition submission deadline:
+              <p className="mt-4 font-bold text-green-900">
+                No petitions were received within
+                the stipulated period.
               </p>
 
-              <p className="mt-1 text-lg font-black text-amber-950 sm:text-xl">
-                {PETITION_DEADLINE}
-              </p>
-
-              <p className="mt-4 text-sm leading-relaxed text-amber-800">
-                Final certification will follow
-                the conclusion of the petition
-                process and resolution of any
-                admissible petitions.
+              <p className="mt-3 text-sm leading-relaxed text-green-800">
+                Following the conclusion of the petition
+                process, the Electoral Commission
+                formally approved the final certification
+                of the published election results.
               </p>
             </div>
           </div>
@@ -706,7 +757,7 @@ export default function ResultsDashboard({
         )}
 
         {/* ==========================================
-            DECLARED EXECUTIVES
+            OFFICIALLY ELECTED EXECUTIVES
         ========================================== */}
 
         <div className="mb-10 text-center">
@@ -715,35 +766,43 @@ export default function ResultsDashboard({
           </div>
 
           <p className="text-xs font-bold uppercase tracking-[0.25em] text-green-700">
-            Electoral Commission Declaration
+            Electoral Commission Certification
           </p>
 
           <h2 className="mt-3 text-3xl font-black text-slate-900 sm:text-4xl">
-            Your Declared Executives
+            Your Officially Elected Executives
           </h2>
 
           <p className="mx-auto mt-4 max-w-2xl text-slate-600">
-            Meet the candidates declared elected
-            following the ACGC General Elections
-            held on 22 November 2026.
+            Meet the six executives officially
+            elected and certified following the
+            ACGC General Elections held on
+            22 November 2026.
           </p>
         </div>
 
         {/* ==========================================
-            MATCHING WARNING
+            CERTIFICATION MATCHING WARNING
         ========================================== */}
 
-        {missingDeclarations.length > 0 && (
+        {missingCertifications.length > 0 && (
           <div className="mb-8 rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
             <p className="font-bold">
-              Some declared candidates could not
+              Some certified candidates could not
               be matched to the published results.
             </p>
 
+            <p className="mt-2">
+              Please verify the following
+              candidate records:
+            </p>
+
             <ul className="mt-3 list-disc space-y-1 pl-5">
-              {missingDeclarations.map((declaration) => (
-                <li key={declaration.position}>
-                  {declaration.position} — {declaration.name}
+              {missingCertifications.map((certification) => (
+                <li key={certification.position}>
+                  {certification.position}
+                  {" — "}
+                  {certification.name}
                 </li>
               ))}
             </ul>
@@ -755,7 +814,7 @@ export default function ResultsDashboard({
         ========================================== */}
 
         <div className="mb-20 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {declaredWinners.map(
+          {certifiedWinners.map(
             ({ position, winner, profile, image }) => {
               const isPresident = positionsMatch(
                 position,
@@ -788,7 +847,7 @@ export default function ResultsDashboard({
                       />
                     </div>
 
-                    {/* Candidate photograph */}
+                    {/* Official candidate photograph */}
 
                     <div className="mb-5 flex justify-center">
                       {candidateImage ? (
@@ -837,9 +896,11 @@ export default function ResultsDashboard({
                         </div>
                       )}
 
+                      {/* Certification badge */}
+
                       <div className="mt-6 inline-flex items-center gap-2 rounded-full bg-green-700 px-4 py-2 text-xs font-black uppercase tracking-wider text-white">
                         <CheckCircle2 size={16} />
-                        Declared Elected
+                        Officially Elected
                       </div>
                     </div>
 
@@ -877,7 +938,7 @@ export default function ResultsDashboard({
         </div>
 
         {/* ==========================================
-            DETAILED RESULTS
+            DETAILED ELECTION RESULTS
         ========================================== */}
 
         <div className="mb-10 border-t border-slate-200 pt-14">
@@ -892,8 +953,22 @@ export default function ResultsDashboard({
           <p className="mt-3 max-w-2xl text-slate-600">
             Complete vote breakdown by position,
             including the original result decisions
-            returned by the election system.
+            recorded by the election system.
+            These results have subsequently received
+            final certification from the Electoral
+            Commission.
           </p>
+
+          <div className="mt-5 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-900">
+            <strong>Certification Notice:</strong>{" "}
+            The original automated result messages
+            below are preserved for transparency.
+            Where they refer to provisional results
+            or pending certification, those statements
+            reflect the earlier election stage and
+            have been superseded by the Electoral
+            Commission's formal certification.
+          </div>
 
           {mode === "admin" && (
             <p className="mt-3 text-sm font-semibold text-amber-700">
@@ -909,8 +984,8 @@ export default function ResultsDashboard({
         ) : (
           <div className="space-y-8">
             {results.map((result) => {
-              const declaredWinner =
-                findDeclaredWinner(result);
+              const certifiedWinner =
+                findCertifiedWinner(result);
 
               return (
                 <div
@@ -944,6 +1019,8 @@ export default function ResultsDashboard({
                       </div>
                     </div>
 
+                    {/* Original backend decision */}
+
                     <div
                       className={`mt-6 rounded-xl border p-4 ${getDecisionStyles(
                         result.status
@@ -959,6 +1036,8 @@ export default function ResultsDashboard({
                     </div>
                   </div>
 
+                  {/* Candidate vote breakdown */}
+
                   <div className="space-y-4 p-6 sm:p-8">
                     {result.candidates.length === 0 ? (
                       <p className="text-slate-500">
@@ -967,10 +1046,10 @@ export default function ResultsDashboard({
                       </p>
                     ) : (
                       result.candidates.map((candidate) => {
-                        const isDeclared =
+                        const isCertified =
                           Boolean(
-                            declaredWinner &&
-                              String(declaredWinner.id) ===
+                            certifiedWinner &&
+                              String(certifiedWinner.id) ===
                                 String(candidate.id)
                           );
 
@@ -985,7 +1064,7 @@ export default function ResultsDashboard({
                           <div
                             key={String(candidate.id)}
                             className={`rounded-xl border p-5 ${
-                              isDeclared
+                              isCertified
                                 ? "border-green-300 bg-green-50"
                                 : "border-slate-200 bg-white"
                             }`}
@@ -1015,9 +1094,9 @@ export default function ResultsDashboard({
                                     </p>
                                   )}
 
-                                  {isDeclared && (
+                                  {isCertified && (
                                     <span className="mt-2 inline-flex rounded-full bg-green-700 px-2.5 py-1 text-xs font-bold text-white">
-                                      Declared Elected
+                                      Officially Elected
                                     </span>
                                   )}
                                 </div>
@@ -1036,6 +1115,8 @@ export default function ResultsDashboard({
                                 </p>
                               </div>
                             </div>
+
+                            {/* Vote percentage bar */}
 
                             <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-slate-200">
                               <div
@@ -1065,10 +1146,10 @@ export default function ResultsDashboard({
         )}
 
         {/* ==========================================
-            ELECTORAL COMMISSION NOTICE
+            OFFICIAL ELECTORAL COMMISSION NOTICE
         ========================================== */}
 
-        <div className="mt-12 rounded-2xl border border-slate-200 bg-white p-6 text-sm leading-relaxed text-slate-600 sm:p-8">
+        <div className="mt-12 rounded-2xl border border-green-200 bg-white p-6 text-sm leading-relaxed text-slate-600 sm:p-8">
           <div className="flex items-center gap-3">
             <ShieldCheck
               size={22}
@@ -1076,35 +1157,42 @@ export default function ResultsDashboard({
             />
 
             <h3 className="text-base font-bold text-slate-900">
-              Electoral Commission Notice
+              Official Electoral Commission Certification
             </h3>
           </div>
 
           <p className="mt-4">
-            The candidates displayed above have
-            been declared elected by the ACGC
-            Electoral Commission. This declaration
-            remains subject to the prescribed
-            72-hour petition period.
+            The ACGC Electoral Commission hereby
+            confirms the final certification of
+            the results of the General Elections
+            held on{" "}
+            <strong>{ELECTION_DATE}</strong>.
           </p>
 
           <p className="mt-3">
-            The petition deadline is{" "}
-            <strong>{PETITION_DEADLINE}</strong>.
-            Final certification remains subject
-            to the Commission's determination
-            following the petition process.
+            The prescribed petition period concluded
+            on{" "}
+            <strong>{PETITION_DEADLINE}</strong>,
+            with no petitions received.
           </p>
 
           <p className="mt-3">
-            Vote counts, percentages, and turnout
-            statistics are retrieved from the
-            election results system.
+            Following formal approval by the Commission,
+            the six declared election outcomes are
+            confirmed as final and certified.
           </p>
 
-          <p className="mt-4 font-semibold text-slate-800">
-            Declaration status: {DECLARATION_STATUS}
+          <p className="mt-3">
+            All vote counts, percentages, and turnout
+            statistics remain unchanged and are
+            retrieved directly from the election
+            results system.
           </p>
+
+          <div className="mt-6 inline-flex items-center gap-2 rounded-full bg-green-700 px-4 py-2 font-bold text-white">
+            <CheckCircle2 size={17} />
+            Certification Status: {CERTIFICATION_STATUS}
+          </div>
         </div>
       </Container>
     </Section>
